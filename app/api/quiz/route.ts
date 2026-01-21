@@ -19,9 +19,9 @@ export async function POST(req: Request) {
     console.log(result, "result");
 
     // If there's an error, return it
-    // if ("error" in result) {
-    //   return NextResponse.json({ error: result.error }, { status: 400 });
-    // }
+    if ("error" in result) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
 
     // console.log(result, "result");
 
