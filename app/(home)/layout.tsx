@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import TrackedLink from "@/components/TrackedLink";
 import { mainMenuData } from "@/data/mainMenuData";
 import React from "react";
-import { Pin } from "lucide-react";
+import { CheckLine, Pin, MessageCircle } from "lucide-react";
 import { siteMetadata } from "@/site.config";
 import AlgoliaSearch from "@/components/search/AlgoliaSearch";
 
@@ -67,6 +67,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     >
       {children}
       <Footer />
+      <ChatWidget />
     </HomeLayout>
   );
 }
@@ -154,7 +155,7 @@ const Reference = () => (
           href={siteMetadata.refSiteUrl}
           className="font-medium"
           target="_blank"
-          // goal="sponsor_ikiform_click"
+        // goal="sponsor_ikiform_click"
         >
           <div className="flex items-center justify-center gap-2">
             <Pin />
@@ -194,3 +195,17 @@ function Footer() {
     </footer>
   );
 }
+
+const ChatWidget = () => (
+  <div className="fixed bottom-10 right-8 z-50">
+    <Link href="/question">
+      <Button
+        size="icon"
+        className="rounded-full shadow-lg h-12 w-12 hover:scale-110 transition-transform duration-200 bg-primary text-primary-foreground hover:bg-primary/90"
+      >
+        <MessageCircle className="size-6" />
+        <span className="sr-only">Open Chat</span>
+      </Button>
+    </Link>
+  </div>
+);
