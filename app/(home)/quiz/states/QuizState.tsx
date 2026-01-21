@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Question, QuizQuestion } from "../components/QuizQuestont";
 import { getStats } from "@/helpers/get-stats";
 import { CheckCircle } from "lucide-react";
-import { QuizResponse } from "@/actions/quiz";
+import { QuizResponse } from "@/lib/schemas/quiz";
 
 type Props = {
   selectedTopic: string | null;
