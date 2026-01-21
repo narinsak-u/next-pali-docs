@@ -1,4 +1,5 @@
-import { quizAction, quizSchema } from "@/actions/quiz";
+import { quizAction } from "@/actions/quiz";
+import { quizSchema } from "@/lib/schemas/quiz";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -15,10 +16,12 @@ export async function POST(req: Request) {
       amount: parsedData.amount,
     });
 
+    console.log(result, "result");
+
     // If there's an error, return it
-    if ("error" in result) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
-    }
+    // if ("error" in result) {
+    //   return NextResponse.json({ error: result.error }, { status: 400 });
+    // }
 
     // console.log(result, "result");
 

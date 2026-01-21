@@ -9,7 +9,7 @@ import Disclaimer from "./Disclaimer";
 import QuizState from "../states/QuizState";
 import ResultState from "../states/ResultState";
 import { experimental_useObject as useObject } from "@ai-sdk/react";
-import { QuizResponse, quizResponeseSchema } from "@/actions/quiz";
+import { QuizResponse, quizResponeseSchema } from "@/lib/schemas/quiz";
 import { mapQuestionsFromResponse } from "@/helpers/map-questions";
 import { notFound } from "next/navigation";
 
