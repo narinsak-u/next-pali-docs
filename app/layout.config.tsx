@@ -38,5 +38,11 @@ export const baseOptions: BaseLayoutProps = {
       url: "/quiz",
       secondary: false,
     },
+    // {
+    //   icon: <CheckLine />,
+    //   text: "ถามตอบ",
+    //   url: "/question",
+    //   secondary: false,
+    // },
   ],
 };
