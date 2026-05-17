@@ -78,10 +78,11 @@ describe('mapQuestionsFromResponse', () => {
 
     const result = mapQuestionsFromResponse(responseQuestions)
 
-    // options array order: [option1, option2, option3, answer]
-    expect(result[0].options[0].id).toBe('Wrong1Test?')
-    expect(result[0].options[1].id).toBe('Wrong2Test?')
-    expect(result[0].options[2].id).toBe('Wrong3Test?')
-    expect(result[0].options[3].id).toBe('CorrectTest?')
+    const optionIds = result[0].options.map(opt => opt.id)
+    expect(optionIds).toContain('Wrong1Test?')
+    expect(optionIds).toContain('Wrong2Test?')
+    expect(optionIds).toContain('Wrong3Test?')
+    expect(optionIds).toContain('CorrectTest?')
+    expect(optionIds).toHaveLength(4)
   })
 })

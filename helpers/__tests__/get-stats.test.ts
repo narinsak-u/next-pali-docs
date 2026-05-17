@@ -85,10 +85,9 @@ describe('getStats', () => {
   it('handles empty questions array', () => {
     const result = getStats([], {})
     expect(result.answeredQuestionsCount).toBe(0)
-    // Empty questions with 0 answers = NaN percentage (division by zero)
-    expect(Number.isNaN(result.progressPercentage)).toBe(true)
+    expect(result.progressPercentage).toBe(0)
     expect(result.allQuestionsAnswered).toBe(false)
     expect(result.score.total).toBe(0)
-    expect(Number.isNaN(result.score.percentage)).toBe(true)
+    expect(result.score.percentage).toBe(0)
   })
 })

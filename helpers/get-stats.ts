@@ -5,7 +5,8 @@ export const getStats = (
   answers: Record<string, string>
 ) => {
   const answeredQuestionsCount = Object.keys(answers).length;
-  const progressPercentage = (answeredQuestionsCount / questions.length) * 100;
+  const progressPercentage =
+    questions.length > 0 ? (answeredQuestionsCount / questions.length) * 100 : 0;
   const allQuestionsAnswered =
     questions.length > 0 && answeredQuestionsCount === questions.length;
 
@@ -32,6 +33,7 @@ const getScore = (questions: Question[], answers: Record<string, string>) => {
   return {
     correct,
     total: questions.length,
-    percentage: Math.round((correct / questions.length) * 100),
+    percentage:
+      questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0,
   };
 };

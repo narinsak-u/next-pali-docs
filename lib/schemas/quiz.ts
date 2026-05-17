@@ -15,7 +15,7 @@ export const quizSchema = z.object({
   amount: z.number(),
 });
 
-export const quizResponeseSchema = z.object({
+export const quizResponseSchema = z.object({
   questions: z.array(
     z.object({
       question: z.string().describe("question text based on the book content"),
@@ -35,4 +35,4 @@ export const quizResponeseSchema = z.object({
   ),
 });
 
-export type QuizResponse = z.infer<typeof quizResponeseSchema>;
+export type QuizResponse = z.infer<typeof quizResponseSchema>;

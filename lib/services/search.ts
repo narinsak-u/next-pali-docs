@@ -31,8 +31,12 @@ function createSearchService(): SearchService {
         },
       ]);
 
-      const hits = (searchResults.results[0] as any).hits as any[];
-      return hits.map((hit) => ({
+      const results = searchResults.results[0];
+      if (!("hits" in results)) return [];
+
+      return (
+        results.hits as Array<{ title?: string; url?: string; content?: string }>
+      ).map((hit) => ({
         title: hit.title || "",
         url: hit.url || "",
         content: hit.content || "",

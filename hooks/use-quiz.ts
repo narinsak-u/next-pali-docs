@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { quizTopics } from "@/data/quiz-topic";
 import { experimental_useObject as useObject } from "@ai-sdk/react";
-import { quizResponeseSchema, type QuizResponse } from "@/lib/schemas/quiz";
+import { quizResponseSchema, type QuizResponse } from "@/lib/schemas/quiz";
 import { mapQuestionsFromResponse } from "@/helpers/map-questions";
 import { getStats } from "@/helpers/get-stats";
 import type { Question } from "@/lib/schemas/quiz";
@@ -44,7 +44,7 @@ export function useQuiz(): UseQuizReturn {
 
   const { object, submit, isLoading, error } = useObject({
     api: "/api/quiz",
-    schema: quizResponeseSchema,
+    schema: quizResponseSchema,
   });
 
   const resetQuizState = useCallback(() => {
@@ -115,7 +115,7 @@ export function useQuiz(): UseQuizReturn {
   }, [resetQuizState]);
 
   useEffect(() => {
-    if (object?.questions && !isLoading) {
+    if (object?.questions) {
       const mappedQuestions = mapQuestionsFromResponse(object.questions);
       setQuestions(mappedQuestions);
       setAppState("quiz");
