@@ -35,8 +35,6 @@ export async function POST(req: Request) {
         .filter(Boolean)
         .join('\n---\n');
 
-    // console.log(context, "context");
-
     const result = streamText({
         model: openai("gpt-4o-mini"),
         system: `You are a helpful assistant that answers questions about the Pali language. Use the context provided to answer the question. If the context does not provide the answer, say "I don't know".
