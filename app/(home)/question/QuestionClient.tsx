@@ -18,7 +18,11 @@ export function QuestionClient() {
       }),
       onError: (err) => {
         console.error("Chat error:", err);
-        if (err?.message?.includes("quota") || err?.message?.includes("429")) {
+        if (
+        err?.message?.includes("quota") ||
+        err?.message?.includes("429") ||
+        err?.message?.includes("Rate limit")
+      ) {
           setError(
             "บริการ AI หมดโควต้าการใช้งาน กรุณาลองใหม่อีกครั้งในภายหลัง",
           );
@@ -38,7 +42,11 @@ export function QuestionClient() {
     } catch (err: unknown) {
       console.error("Send error:", err);
       const message = err instanceof Error ? err.message : "";
-      if (message.includes("quota") || message.includes("429")) {
+      if (
+        message.includes("quota") ||
+        message.includes("429") ||
+        message.includes("Rate limit")
+      ) {
         setError("บริการ AI หมดโควต้าการใช้งาน กรุณาลองใหม่อีกครั้งในภายหลัง");
       } else {
         setError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง");

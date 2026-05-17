@@ -30,7 +30,12 @@ ${context}`,
   } catch (error: unknown) {
     console.error("AI API error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    if (message.includes("quota") || message.includes("429")) {
+    if (
+      message.includes("quota") ||
+      message.includes("429") ||
+      message.includes("Rate limit") ||
+      message.includes("FreeUsageLimit")
+    ) {
       return new Response(
         JSON.stringify({
           error: "insufficient_quota",
