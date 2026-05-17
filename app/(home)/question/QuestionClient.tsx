@@ -14,7 +14,7 @@ export function QuestionClient() {
   const { messages, stop, setMessages, status, sendMessage, regenerate } =
     useChat({
       transport: new DefaultChatTransport({
-        api: "/api/question",
+        api: "/api/ai",
       }),
       onError: (err) => {
         console.error("Chat error:", err);
