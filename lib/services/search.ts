@@ -36,6 +36,8 @@ function createSearchService(): SearchService {
 
       type AlgoliaHit = { title?: string; url?: string; content?: string };
       return (results.hits as AlgoliaHit[]).map((hit) => ({
+        results.hits as Array<{ title?: string; url?: string; content?: string }>
+      ).map((hit) => ({
         title: hit.title || "",
         url: hit.url || "",
         content: hit.content || "",

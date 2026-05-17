@@ -1,11 +1,21 @@
 import { z } from "zod";
 
+export interface Question {
+  id: string;
+  questionText: string;
+  options: {
+    id: string;
+    text: string;
+  }[];
+  answerId: string;
+}
+
 export const quizSchema = z.object({
   topics: z.array(z.string()),
   amount: z.number(),
 });
 
-export const quizResponeseSchema = z.object({
+export const quizResponseSchema = z.object({
   questions: z.array(
     z.object({
       question: z.string().describe("question text based on the book content"),
@@ -25,4 +35,4 @@ export const quizResponeseSchema = z.object({
   ),
 });
 
-export type QuizResponse = z.infer<typeof quizResponeseSchema>;
+export type QuizResponse = z.infer<typeof quizResponseSchema>;

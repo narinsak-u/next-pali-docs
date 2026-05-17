@@ -14,7 +14,7 @@ type Props = {
   currentPage: number;
   setCurrentPage: (page: number) => void;
   questions: Question[];
-  object: QuizResponse;
+  object?: QuizResponse;
   answers: Record<string, string>;
   quizCompleted: boolean;
   timeExpired: boolean;
