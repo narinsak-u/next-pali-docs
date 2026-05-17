@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useCallback } from "react";
 import { quizTopics } from "@/data/quiz-topic";
-import { experimental_useObject as useObject } from "@ai-sdk/react";
-import { quizResponseSchema, type QuizResponse } from "@/lib/schemas/quiz";
 import { mapQuestionsFromResponse } from "@/helpers/map-questions";
-import { getStats } from "@/helpers/get-stats";
 import type { Question } from "@/lib/schemas/quiz";
 
-type AppState = "home" | "loading" | "quiz" | "results";
+import { useQuizFlow } from "@/lib/hooks/use-quiz-flow";
+import { useQuizData } from "@/lib/hooks/use-quiz-data";
+import { useQuizUI } from "@/lib/hooks/use-quiz-ui";
+import { useQuizAI } from "@/lib/hooks/use-quiz-ai";
+import { useQuizStats } from "@/lib/hooks/use-quiz-stats";
 
 interface UseQuizReturn {
-  appState: AppState;
+  appState: "home" | "loading" | "quiz" | "results";
   selectedTopic: string | null;
   questions: Question[];
   currentPage: number;
@@ -20,7 +21,7 @@ interface UseQuizReturn {
   timeExpired: boolean;
   isLoading: boolean;
   error: Error | null;
-  object: QuizResponse | undefined;
+  object: import("@/lib/schemas/quiz").QuizResponse | undefined;
   allQuestionsAnswered: boolean;
   answeredQuestionsCount: number;
   progressPercentage: number;
@@ -34,27 +35,11 @@ interface UseQuizReturn {
 }
 
 export function useQuiz(): UseQuizReturn {
-  const [appState, setAppState] = useState<AppState>("home");
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [quizCompleted, setQuizCompleted] = useState(false);
-  const [timeExpired, setTimeExpired] = useState(false);
-
-  const { object, submit, isLoading, error } = useObject({
-    api: "/api/quiz",
-    schema: quizResponseSchema,
-  });
-
-  const resetQuizState = useCallback(() => {
-    setAnswers({});
-    setCurrentPage(1);
-    setQuizCompleted(false);
-    setTimeExpired(false);
-  }, []);
-
-  const stats = useMemo(() => getStats(questions, answers), [questions, answers]);
+  const flow = useQuizFlow();
+  const data = useQuizData();
+  const ui = useQuizUI();
+  const ai = useQuizAI();
+  const { stats } = useQuizStats(data.questions, data.answers);
 
   const startQuiz = useCallback(
     async (topicId: string) => {
@@ -64,81 +49,89 @@ export function useQuiz(): UseQuizReturn {
         return;
       }
 
-      setSelectedTopic(topicId);
-      setAppState("loading");
-      resetQuizState();
+      data.setTopic(topicId);
+      flow.start();
+      ui.reset();
+      data.clearAnswers();
 
-      submit({
+      ai.submit({
         amount: topic.amount,
         topics: topic.keywords,
       });
     },
-    [submit, resetQuizState]
+    [ai, data, flow, ui]
   );
 
-  const selectOption = useCallback((questionId: string, optionId: string) => {
-    setAnswers((prev) => ({
-      ...prev,
-      [questionId]: optionId,
-    }));
-  }, []);
+  const selectOption = useCallback(
+    (questionId: string, optionId: string) => {
+      data.answer(questionId, optionId);
+    },
+    [data]
+  );
 
-  const goToPage = useCallback((page: number) => {
-    setCurrentPage(page);
-  }, []);
+  const goToPage = useCallback(
+    (page: number) => {
+      ui.setPage(page);
+    },
+    [ui]
+  );
 
   const timeUp = useCallback(() => {
-    setTimeExpired(true);
+    ui.markExpired();
 
-    const updatedAnswers = { ...answers };
-    questions.forEach((q) => {
+    const updatedAnswers = { ...data.answers };
+    data.questions.forEach((q) => {
       if (!updatedAnswers[q.id]) {
         updatedAnswers[q.id] = "time-expired";
       }
     });
 
-    setAnswers(updatedAnswers);
-    setQuizCompleted(true);
-    setAppState("results");
-  }, [answers, questions]);
+    Object.keys(updatedAnswers).forEach((key) => {
+      data.answer(key, updatedAnswers[key]);
+    });
+
+    ui.markComplete();
+    flow.goToResults();
+  }, [data, flow, ui]);
 
   const submitQuiz = useCallback(() => {
-    setQuizCompleted(true);
-    setAppState("results");
-  }, []);
+    ui.markComplete();
+    flow.goToResults();
+  }, [flow, ui]);
 
   const restartQuiz = useCallback(() => {
-    setAppState("home");
-    setSelectedTopic(null);
-    setQuestions([]);
-    resetQuizState();
-  }, [resetQuizState]);
+    flow.goToHome();
+    data.setTopic(null);
+    data.setQuestions([]);
+    ui.reset();
+    data.clearAnswers();
+  }, [data, flow, ui]);
 
   useEffect(() => {
-    if (object?.questions) {
-      const mappedQuestions = mapQuestionsFromResponse(object.questions);
-      setQuestions(mappedQuestions);
-      setAppState("quiz");
+    if (ai.object?.questions) {
+      const mappedQuestions = mapQuestionsFromResponse(ai.object.questions);
+      data.setQuestions(mappedQuestions);
+      flow.goToQuiz();
     }
-  }, [object, isLoading]);
+  }, [ai.object, ai.isLoading, data, flow]);
 
   useEffect(() => {
-    if (appState === "quiz" || appState === "results") {
+    if (flow.appState === "quiz" || flow.appState === "results") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
-  }, [currentPage, appState]);
+  }, [ui.currentPage, flow.appState]);
 
   return {
-    appState,
-    selectedTopic,
-    questions,
-    currentPage,
-    answers,
-    quizCompleted,
-    timeExpired,
-    isLoading,
-    error: error ?? null,
-object: object as QuizResponse | undefined,
+    appState: flow.appState,
+    selectedTopic: data.selectedTopic,
+    questions: data.questions,
+    currentPage: ui.currentPage,
+    answers: data.answers,
+    quizCompleted: ui.completed,
+    timeExpired: ui.timeExpired,
+    isLoading: ai.isLoading,
+    error: ai.error,
+    object: ai.object,
     allQuestionsAnswered: stats.allQuestionsAnswered,
     answeredQuestionsCount: stats.answeredQuestionsCount,
     progressPercentage: stats.progressPercentage,

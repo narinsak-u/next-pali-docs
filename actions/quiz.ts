@@ -1,25 +1,12 @@
-import { generateEmbedding } from "@/lib/services/embedding";
-import { queryPinecone, formatContext } from "@/lib/services/vector-store";
-import { generateQuizResponse } from "@/lib/services/quiz-generator";
+import { generateQuiz } from "@/lib/services/quiz-pipeline";
+import { quizSchema } from "@/lib/schemas/quiz";
 
 export const maxDuration = 30;
 
-export async function quizAction(input: { topics: string[]; amount: number }) {
+export async function quizAction(input: unknown) {
   try {
-    const embedding = await generateEmbedding(input.topics.join(", "));
-
-    const matches = await queryPinecone(embedding, 10);
-    const context = formatContext(matches);
-
-    console.log(context, "context");
-
-    const response = await generateQuizResponse({
-      topics: input.topics,
-      amount: input.amount,
-      context,
-    });
-
-    return response;
+    const parsed = quizSchema.parse(input);
+    return generateQuiz({ topics: parsed.topics, amount: parsed.amount });
   } catch (error) {
     console.error("Error processing quiz request:", error);
     return {
