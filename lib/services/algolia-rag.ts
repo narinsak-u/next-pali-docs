@@ -1,4 +1,6 @@
 import { searchService } from "./search";
+import { extractTextFromMessages } from "./rag-pipeline";
+import type { UIMessage } from "ai";
 
 export interface AlgoliaRAGOptions {
   topK?: number;
@@ -9,36 +11,12 @@ export interface AlgoliaRAGResult {
   sources: Array<{ title: string; url: string }>;
 }
 
-export function extractQueryFromMessages(messages: unknown[]): string {
-  const lastMessage = messages?.[messages.length - 1];
-  if (!lastMessage) return "";
-
-  // Handle UIMessage format with parts array
-  if (
-    typeof lastMessage === "object" &&
-    lastMessage !== null &&
-    "parts" in lastMessage &&
-    Array.isArray((lastMessage as { parts: unknown[] }).parts)
-  ) {
-    const textPart = (lastMessage as { parts: unknown[] }).parts.find(
-      (p) => typeof p === "object" && p !== null && (p as { type?: string }).type === "text",
-    );
-    if (textPart && typeof textPart === "object" && "text" in textPart) {
-      return (textPart as { text: string }).text || "";
-    }
-  }
-
-  // Handle UIMessage format with content string
-  if (
-    typeof lastMessage === "object" &&
-    lastMessage !== null &&
-    "content" in lastMessage &&
-    typeof (lastMessage as { content: unknown }).content === "string"
-  ) {
-    return (lastMessage as { content: string }).content;
-  }
-
-  return "";
+/**
+ * Extract the last user message text from a UIMessage array.
+ * Re-exports extractTextFromMessages from rag-pipeline for API compatibility.
+ */
+export function extractQueryFromMessages(messages: UIMessage[]): string {
+  return extractTextFromMessages(messages);
 }
 
 export async function runAlgoliaRAG(
@@ -56,9 +34,7 @@ export async function runAlgoliaRAG(
     hitsPerPage: topK,
   });
 
-  const context = results
-    .map((r) => `Title: ${r.title}\nContent: ${r.content}`)
-    .join("\n---\n");
+  const context = searchService.formatAsContext(results);
 
   const sources = results.map((r) => ({
     title: r.title,
