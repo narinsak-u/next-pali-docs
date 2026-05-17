@@ -9,15 +9,42 @@ import { useRef, useEffect, useState, type ComponentProps } from "react";
 import { DefaultChatTransport } from "ai";
 
 export function QuestionClient() {
-  const [input, setInput] = useState('');
-  const { messages, stop, setMessages, status, sendMessage, regenerate } = useChat({
-    transport: new DefaultChatTransport({
-      api: '/api/question',
-    }),
-  });
+  const [input, setInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const { messages, stop, setMessages, status, sendMessage, regenerate } =
+    useChat({
+      transport: new DefaultChatTransport({
+        api: "/api/question",
+      }),
+      onError: (err) => {
+        console.error("Chat error:", err);
+        if (err?.message?.includes("quota") || err?.message?.includes("429")) {
+          setError(
+            "บริการ AI หมดโควต้าการใช้งาน กรุณาลองใหม่อีกครั้งในภายหลัง",
+          );
+        } else {
+          setError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง");
+        }
+      },
+    });
   // console.log(status);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleSubmit = async (text: string) => {
+    setError(null);
+    try {
+      sendMessage({ text });
+    } catch (err: unknown) {
+      console.error("Send error:", err);
+      const message = err instanceof Error ? err.message : "";
+      if (message.includes("quota") || message.includes("429")) {
+        setError("บริการ AI หมดโควต้าการใช้งาน กรุณาลองใหม่อีกครั้งในภายหลัง");
+      } else {
+        setError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง");
+      }
+    }
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -31,13 +58,16 @@ export function QuestionClient() {
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center text-fd-muted-foreground p-8">
             <Bot className="size-12 mb-4 opacity-20" />
-            <h2 className="text-2xl font-semibold mb-2">ฉันจะช่วยอะไรคุณได้บ้างวันนี้?</h2>
+            <h2 className="text-2xl font-semibold mb-2">
+              ฉันจะช่วยอะไรคุณได้บ้างวันนี้?
+            </h2>
             <p className="max-w-md">
-              ถามอะไรก็ได้เกี่ยวกับเอกสาร Pali ฉันสามารถช่วยค้นหาข้อมูล อธิบายแนวคิด และอื่น ๆ ได้
+              ถามอะไรก็ได้เกี่ยวกับเอกสาร Pali ฉันสามารถช่วยค้นหาข้อมูล
+              อธิบายแนวคิด และอื่น ๆ ได้
             </p>
           </div>
         )}
-        {/* 
+        {/*
         {status === "streaming" && messages[messages.length - 1]?.role === "assistant" && (
           <div className="flex justify-start w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="flex gap-3 max-w-[85%] lg:max-w-[75%] flex-row">
@@ -59,13 +89,13 @@ export function QuestionClient() {
             key={m.id}
             className={cn(
               "flex w-full animate-in fade-in slide-in-from-bottom-2 duration-300",
-              m.role === "user" ? "justify-end" : "justify-start"
+              m.role === "user" ? "justify-end" : "justify-start",
             )}
           >
             <div
               className={cn(
                 "flex gap-3 max-w-[85%] lg:max-w-[75%]",
-                m.role === "user" ? "flex-row-reverse" : "flex-row"
+                m.role === "user" ? "flex-row-reverse" : "flex-row",
               )}
             >
               <div
@@ -73,7 +103,7 @@ export function QuestionClient() {
                   "flex size-8 shrink-0 items-center justify-center rounded-full border shadow-sm",
                   m.role === "user"
                     ? "bg-background"
-                    : "bg-primary text-primary-foreground"
+                    : "bg-primary text-primary-foreground",
                 )}
               >
                 {m.role === "user" ? (
@@ -87,40 +117,53 @@ export function QuestionClient() {
                   "relative px-5 py-2 shadow-sm",
                   m.role === "user"
                     ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-sm"
-                    : "bg-card border text-card-foreground rounded-2xl rounded-tl-sm"
+                    : "bg-card border text-card-foreground rounded-2xl rounded-tl-sm",
                 )}
               >
                 <div className="prose prose-sm dark:prose-invert break-words max-w-none">
-                  {
-                    m.parts?.map((part, index) =>
-                      part.type === "text" ? (
-                        <span key={index}>{part.text}</span>
-                      ) : null
-                    )
-                  }
+                  {m.parts?.map((part, index) =>
+                    part.type === "text" ? (
+                      <span key={index}>{part.text}</span>
+                    ) : null,
+                  )}
                 </div>
               </div>
             </div>
           </div>
         ))}
-
-
       </div>
 
       <div className="p-4  bg-fd-background/50 backdrop-blur-sm sticky bottom-0 z-10">
+        {error && (
+          <div className="max-w-4xl mx-auto mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 dark:bg-red-950 dark:border-red-800 dark:text-red-300 text-sm flex items-center justify-between">
+            <span>{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="ml-2 text-red-500 hover:text-red-700 dark:hover:text-red-300"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         <div className="max-w-4xl mx-auto relative flex flex-col gap-2">
           {messages.length > 0 && status === "ready" && (
             <div className="flex justify-center gap-2 mb-2">
               <button
                 onClick={() => regenerate()}
-                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-2 rounded-full")}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "gap-2 rounded-full",
+                )}
               >
                 <RefreshCw className="size-3" />
                 Regenerate
               </button>
               <button
                 onClick={() => setMessages([])}
-                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-2 rounded-full")}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "gap-2 rounded-full",
+                )}
               >
                 <Trash2 className="size-3" />
                 Clear
@@ -128,25 +171,32 @@ export function QuestionClient() {
             </div>
           )}
 
-          <form onSubmit={(e) => {
-            e.preventDefault();
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
 
-            if (input.trim()) {
-              sendMessage({ text: input });
-              setInput('');
-            }
-          }} className="relative flex items-center justify-center gap-2">
+              if (input.trim()) {
+                void handleSubmit(input);
+                setInput("");
+              }
+            }}
+            className="relative flex items-center justify-center gap-2"
+          >
             <TextareaInput
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              disabled={status !== 'ready'}
-              placeholder={status === "streaming" ? "กำลังคิด..." : "ถามคำถาม..."}
+              disabled={status !== "ready"}
+              placeholder={
+                status === "streaming" ? "กำลังคิด..." : "ถามคำถาม..."
+              }
               className="pr-12 min-h-[52px] max-h-[200px]"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  sendMessage({ text: input });
-                  setInput('');
+                  if (input.trim()) {
+                    void handleSubmit(input);
+                    setInput("");
+                  }
                 }
               }}
             />
@@ -155,7 +205,10 @@ export function QuestionClient() {
                 <button
                   type="button"
                   onClick={() => stop()}
-                  className={cn(buttonVariants({ size: "icon", variant: "ghost" }), "h-8 w-8 rounded-full")}
+                  className={cn(
+                    buttonVariants({ size: "icon", variant: "ghost" }),
+                    "h-8 w-8 rounded-full",
+                  )}
                 >
                   <Loader2 className="size-4 animate-spin" />
                 </button>
@@ -163,7 +216,10 @@ export function QuestionClient() {
                 <button
                   type="submit"
                   disabled={status !== "ready"}
-                  className={cn(buttonVariants({ size: "icon", variant: "default" }), "h-8 w-8 rounded-full")}
+                  className={cn(
+                    buttonVariants({ size: "icon", variant: "default" }),
+                    "h-8 w-8 rounded-full",
+                  )}
                 >
                   <Send className="size-4" />
                 </button>
@@ -196,7 +252,7 @@ function TextareaInput(props: ComponentProps<"textarea">) {
       {...props}
       className={cn(
         "flex w-full rounded-2xl border border-fd-input bg-fd-background px-4 py-3 text-sm ring-offset-fd-background placeholder:text-fd-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none overflow-hidden",
-        props.className
+        props.className,
       )}
     />
   );

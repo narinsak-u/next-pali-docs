@@ -66,3 +66,8 @@ export async function generateQuiz(
     context,
   });
 }
+
+export function isQuotaError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return err.message.includes("quota") || err.message.includes("429");
+}
