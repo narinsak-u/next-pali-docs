@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+export interface Question {
+  id: string;
+  questionText: string;
+  options: {
+    id: string;
+    text: string;
+  }[];
+  answerId: string;
+}
+
 export const quizSchema = z.object({
   topics: z.array(z.string()),
   amount: z.number(),

@@ -1,4 +1,4 @@
-import { Question } from "@/app/(home)/quiz/components/QuizContents";
+import { type Question } from "@/lib/schemas/quiz";
 
 export const mapQuestionsFromResponse = (responseQuestions: any[]) => {
   return responseQuestions

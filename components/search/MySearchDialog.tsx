@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import client from "@/lib/algolia-client";
+import { searchService } from "@/lib/services/search";
 import {
   SearchDialog,
   SearchDialogClose,
@@ -38,7 +38,6 @@ export default function MySearchDialog(props: SharedProps) {
   const [loading, setLoading] = useState(false);
   const [aiSearchOpen, setAiSearchOpen] = useState<boolean>();
 
-  // Search function
   const performSearch = async (searchQuery: string) => {
     if (!searchQuery.trim()) {
       setResults([]);
@@ -48,20 +47,11 @@ export default function MySearchDialog(props: SharedProps) {
     setLoading(true);
 
     try {
-      const searchResults = await client.search([
-        {
-          indexName: "docs",
-          params: {
-            query: searchQuery,
-            hitsPerPage: 20,
-            // attributesToHighlight: ["title", "content", "text"],
-            highlightPreTag: "<mark>",
-            highlightPostTag: "</mark>",
-          },
-        },
-      ]);
-
-      setResults((searchResults.results[0] as any).hits as SearchResult[]);
+      const searchResults = await searchService.search({
+        query: searchQuery,
+        hitsPerPage: 20,
+      });
+      setResults(searchResults as unknown as SearchResult[]);
     } catch (error) {
       console.error("Search error:", error);
       setResults([]);

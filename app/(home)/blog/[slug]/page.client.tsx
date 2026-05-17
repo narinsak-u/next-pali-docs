@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Share } from "lucide-react";
-import { cn } from "@/lib/cn";
+import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { useCopyButton } from "fumadocs-ui/utils/use-copy-button";
 

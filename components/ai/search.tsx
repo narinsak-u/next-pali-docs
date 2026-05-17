@@ -1,18 +1,9 @@
 "use client";
 
-import {
-  type ComponentProps,
-  createContext,
-  type SyntheticEvent,
-  use,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import { Loader2, RefreshCw, Send, X } from "lucide-react";
-import { cn } from "../../lib/cn";
+import { createContext, use, type ReactNode } from "react";
+import { X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { buttonVariants } from "../ui/button";
-import Link from "fumadocs-core/link";
 import {
   Dialog,
   DialogClose,
@@ -24,239 +15,26 @@ import {
   DialogTitle,
 } from "@radix-ui/react-dialog";
 import { type UIMessage, useChat, type UseChatHelpers } from "@ai-sdk/react";
-import type { ProvideLinksToolSchema } from "../../lib/chat/inkeep-qa-schema";
-import type { z } from "zod";
 import { DefaultChatTransport } from "ai";
-import { Markdown } from "./markdown";
+import { ChatInput } from "./ChatInput";
+import { ChatMessage } from "./ChatMessage";
+import { ChatActions } from "./ChatActions";
 
 const ChatContext = createContext<UseChatHelpers<UIMessage> | null>(null);
-function useChatContext() {
+export function useChatContext() {
   return use(ChatContext)!;
 }
 
-function SearchAIActions(props: ComponentProps<"div">) {
-  const { messages, status, setMessages, regenerate } = useChatContext();
-  const isLoading = status === "streaming";
-
-  if (messages.length === 0) return null;
-
-  return (
-    <div {...props}>
-      {!isLoading && messages.at(-1)?.role === "assistant" && (
-        <button
-          type="button"
-          className={cn(
-            buttonVariants({
-              variant: "secondary",
-              size: "sm",
-              className: "rounded-full gap-1.5 cursor-pointer",
-            })
-          )}
-          onClick={() => regenerate()}
-        >
-          <RefreshCw className="size-4" />
-          Retry
-        </button>
-      )}
-      <button
-        type="button"
-        className={cn(
-          buttonVariants({
-            variant: "secondary",
-            size: "sm",
-            className: "rounded-full cursor-pointer",
-          })
-        )}
-        onClick={() => setMessages([])}
-      >
-        Clear Chat
-      </button>
-    </div>
-  );
-}
-
-function SearchAIInput(props: ComponentProps<"form">) {
-  const { status, sendMessage, stop } = useChatContext();
-  const [input, setInput] = useState("");
-  const isLoading = status === "streaming" || status === "submitted";
-
-  const onStart = (e?: SyntheticEvent) => {
-    e?.preventDefault();
-    void sendMessage({ text: input });
-    setInput("");
-  };
-
-  useEffect(() => {
-    if (isLoading) document.getElementById("nd-ai-input")?.focus();
-  }, [isLoading]);
-
-  return (
-    <form
-      {...props}
-      className={cn("flex items-start pe-2", props.className)}
-      onSubmit={onStart}
-    >
-      <Input
-        value={input}
-        placeholder={isLoading ? "AI is answering..." : "Ask AI something"}
-        className="max-h-60 min-h-10 p-3"
-        disabled={status === "streaming" || status === "submitted"}
-        onChange={(e) => {
-          setInput(e.target.value);
-        }}
-        onKeyDown={(event) => {
-          if (!event.shiftKey && event.key === "Enter") {
-            onStart(event);
-          }
-        }}
-      />
-      {isLoading ? (
-        <button
-          type="button"
-          className={cn(
-            buttonVariants({
-              variant: "secondary",
-              className: "rounded-full mt-2 gap-2",
-            })
-          )}
-          onClick={stop}
-        >
-          <Loader2 className="size-4 animate-spin text-fd-muted-foreground" />
-          Abort Answer
-        </button>
-      ) : (
-        <button
-          type="submit"
-          className={cn(
-            buttonVariants({
-              variant: "ghost",
-              className: "transition-full rounded-full mt-2",
-              size: "sm",
-            })
-          )}
-          disabled={input.length === 0}
-        >
-          <Send className="size-4" />
-        </button>
-      )}
-    </form>
-  );
-}
-
-function List(props: Omit<ComponentProps<"div">, "dir">) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    function callback() {
-      const container = containerRef.current;
-      if (!container) return;
-
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: "instant",
-      });
-    }
-
-    const observer = new ResizeObserver(callback);
-    callback();
-
-    const element = containerRef.current?.firstElementChild;
-
-    if (element) {
-      observer.observe(element);
-    }
-
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-
+function List({ children }: { children: ReactNode }) {
   return (
     <div
-      ref={containerRef}
-      {...props}
-      className={cn(
-        "fd-scroll-container overflow-y-auto max-h-[calc(100dvh-240px)] min-w-0 flex flex-col",
-        props.className
-      )}
+      className="fd-scroll-container overflow-y-auto max-h-[calc(100dvh-240px)] min-w-0 flex flex-col"
+      style={{
+        maskImage:
+          "linear-gradient(to bottom, transparent, black 20px, black calc(100% - 20px), transparent)",
+      }}
     >
-      {props.children}
-    </div>
-  );
-}
-
-function Input(props: ComponentProps<"textarea">) {
-  const ref = useRef<HTMLDivElement>(null);
-  const shared = cn("col-start-1 row-start-1", props.className);
-
-  return (
-    <div className="grid flex-1">
-      <textarea
-        id="nd-ai-input"
-        {...props}
-        className={cn(
-          "resize-none bg-transparent placeholder:text-fd-muted-foreground focus-visible:outline-none",
-          shared
-        )}
-      />
-      <div ref={ref} className={cn(shared, "break-all invisible")}>
-        {`${props.value?.toString() ?? ""}\n`}
-      </div>
-    </div>
-  );
-}
-
-const roleName: Record<string, string> = {
-  user: "you",
-  assistant: "palidocs",
-};
-
-function Message({
-  message,
-  ...props
-}: { message: UIMessage } & ComponentProps<"div">) {
-  let markdown = "";
-  let links: z.infer<typeof ProvideLinksToolSchema>["links"] = [];
-
-  for (const part of message.parts ?? []) {
-    if (part.type === "text") {
-      markdown += part.text;
-      continue;
-    }
-
-    if (part.type === "tool-provideLinks" && part.input) {
-      links = (part.input as z.infer<typeof ProvideLinksToolSchema>).links;
-    }
-  }
-
-  return (
-    <div {...props}>
-      <p
-        className={cn(
-          "mb-1 text-sm font-medium text-fd-muted-foreground",
-          message.role === "assistant" && "text-fd-primary"
-        )}
-      >
-        {`${roleName[message.role]}:` || "unknown"}
-      </p>
-      <div className="prose text-sm">
-        <Markdown text={markdown} />
-      </div>
-      {links && links.length > 0 ? (
-        <div className="mt-2 flex flex-row flex-wrap items-center gap-1">
-          {links.map((item, i) => (
-            <Link
-              key={i}
-              href={item.url}
-              className="block text-xs rounded-lg border p-3 hover:bg-fd-accent hover:text-fd-accent-foreground"
-            >
-              <p className="font-medium">{item.title}</p>
-              <p className="text-fd-muted-foreground">Reference {item.label}</p>
-            </Link>
-          ))}
-        </div>
-      ) : null}
+      <div className="flex flex-col gap-4 p-3">{children}</div>
     </div>
   );
 }
@@ -308,22 +86,15 @@ export default function AISearch(props: DialogProps) {
             </DialogClose>
 
             {messages.length > 0 && (
-              <List
-                style={{
-                  maskImage:
-                    "linear-gradient(to bottom, transparent, black 20px, black calc(100% - 20px), transparent)",
-                }}
-              >
-                <div className="flex flex-col gap-4 p-3">
-                  {messages.map((item) => (
-                    <Message key={item.id} message={item} />
-                  ))}
-                </div>
+              <List>
+                {messages.map((item) => (
+                  <ChatMessage key={item.id} message={item} />
+                ))}
               </List>
             )}
             <div className="rounded-xl overflow-hidden border border-fd-foreground/20 text-fd-popover-foreground">
-              <SearchAIInput />
-              <SearchAIActions className="flex flex-row items-center gap-1.5 p-1 empty:hidden" />
+              <ChatInput />
+              <ChatActions className="flex flex-row items-center gap-1.5 p-1 empty:hidden" />
             </div>
           </ChatContext>
         </DialogContent>
