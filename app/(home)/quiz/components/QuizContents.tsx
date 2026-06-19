@@ -8,6 +8,18 @@ import ResultState from "../states/ResultState";
 import Disclaimer from "./Disclaimer";
 import { notFound } from "next/navigation";
 
+function getErrorMessage(err: Error | null): string | null {
+  if (!err) return null;
+  const msg = err.message || "";
+  if (msg.includes("quota") || msg.includes("429") || msg.includes("insufficient_quota")) {
+    return "บริการ AI หมดโควต้าการใช้งาน กรุณาลองใหม่อีกครั้งในภายหลัง";
+  }
+  if (msg.includes("Failed to process")) {
+    return "เกิดข้อผิดพลาดในการสร้างแบบทดสอบ กรุณาลองใหม่อีกครั้ง";
+  }
+  return "เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง";
+}
+
 export default function QuizContents() {
   const {
     appState,
@@ -31,18 +43,6 @@ export default function QuizContents() {
     submitQuiz,
     restartQuiz,
   } = useQuiz();
-
-  const getErrorMessage = (err: Error | null): string | null => {
-    if (!err) return null;
-    const msg = err.message || "";
-    if (msg.includes("quota") || msg.includes("429") || msg.includes("insufficient_quota")) {
-      return "บริการ AI หมดโควต้าการใช้งาน กรุณาลองใหม่อีกครั้งในภายหลัง";
-    }
-    if (msg.includes("Failed to process")) {
-      return "เกิดข้อผิดพลาดในการสร้างแบบทดสอบ กรุณาลองใหม่อีกครั้ง";
-    }
-    return "เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง";
-  };
 
   const handleRetry = () => {
     if (selectedTopic) {

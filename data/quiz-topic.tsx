@@ -150,10 +150,10 @@ export const quizTopics = [
 //   }));
 // };
 
+export const quizTopicsById = new Map(quizTopics.map((t) => [t.id, t]));
+
 export const getTopicTitle = (selectedTopic: string | null) => {
-  return (
-    quizTopics.find((topic) => topic.id === selectedTopic)?.title || "Quiz"
-  );
+  return quizTopicsById.get(selectedTopic ?? "")?.title || "Quiz";
 };
 
 export const suggestedQuestions = [

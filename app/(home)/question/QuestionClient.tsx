@@ -30,8 +30,6 @@ export function QuestionClient() {
         }
       },
     });
-  console.log(status);
-  console.log(messages, "message on client");
 
   const scrollRef = useRef<HTMLDivElement>(null);
 

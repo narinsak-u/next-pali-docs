@@ -1,4 +1,4 @@
-import { getTopicTitle, quizTopics } from "@/data/quiz-topic";
+import { getTopicTitle, quizTopicsById } from "@/data/quiz-topic";
 import { QuizTimer } from "../components/QuizTimer";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -51,6 +51,7 @@ const QuizState = ({
     (currentPage - 1) * questionsPerPage,
     currentPage * questionsPerPage
   );
+  const topic = quizTopicsById.get(selectedTopic ?? "");
 
   return (
     <div className="border-l border-t border-r px-6 py-12">
@@ -62,7 +63,7 @@ const QuizState = ({
             </h1>
             <p className="text-muted-foreground">
               {`กรุณาตอบคำถามทั้ง ${
-                quizTopics.find((topic) => topic.id === selectedTopic)?.amount
+                topic?.amount
               } ข้อเพื่อทำแบบทดสอบให้เสร็จสมบูรณ์`}
             </p>
           </div>
@@ -70,8 +71,7 @@ const QuizState = ({
           {!isLoading && (
             <QuizTimer
               duration={
-                quizTopics.find((topic) => topic.id === selectedTopic)?.time! *
-                60
+                (topic?.time ?? 0) * 60
               }
               onTimeUp={handleTimeUp}
             />

@@ -20,7 +20,7 @@ import { mainMenuData } from "@/data/mainMenuData";
 import React from "react";
 import { CheckLine, Pin, MessageCircle } from "lucide-react";
 import { siteMetadata } from "@/site.config";
-import AlgoliaSearch from "@/components/search/AlgoliaSearch";
+import AlgoliaSearchLoader from "@/components/search/AlgoliaSearchLoader";
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
@@ -34,7 +34,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       }
       searchToggle={{
         components: {
-          lg: <AlgoliaSearch />,
+          lg: <AlgoliaSearchLoader />,
         },
       }}
       links={[
