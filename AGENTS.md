@@ -2,19 +2,7 @@
 
 ## Project Overview
 
-This is a Next.js 15 documentation site for Pali language learning, using the App Router, TypeScript, Tailwind CSS v4, and Fumadocs for content management. The site features AI-powered chat, quiz functionality, and documentation rendering.
-
-## Tech Stack
-
-- **Framework:** Next.js 15 (App Router)
-- **Language:** TypeScript (strict mode)
-- **Styling:** Tailwind CSS v4, class-variance-authority (cva)
-- **UI Components:** Radix UI primitives
-- **Content:** Fumadocs + MDX
-- **Search:** Algolia + Pinecone (vector search)
-- **AI:** @ai-sdk/react, ai package, OpenAI-compatible models
-- **Validation:** Zod schemas
-- **Icons:** Lucide React
+Next.js 15 documentation site for Pali language learning (App Router, TypeScript, Tailwind CSS v4, Fumadocs). Features AI-powered chat, quizzes, Algolia + Pinecone search, Radix UI / shadcn components, Zod validation, Lucide icons. Testing via Vitest v4 with jsdom + @testing-library/react.
 
 ## Commands
 
@@ -23,104 +11,127 @@ This is a Next.js 15 documentation site for Pali language learning, using the Ap
 | `npm run dev` | Start development server with Turbopack |
 | `npm run build` | Build for production (runs `next build` then updates index) |
 | `npm run start` | Start production server |
+| `npm test` | Run all tests in watch mode |
+| `npm run test:run` | Run all tests once |
 | `npm run index` | Run the search index update script |
 | `npm run postinstall` | Auto-runs fumadocs-mdx after npm install |
+**Single test:** `npx vitest run helpers/__tests__/get-stats.test.ts`
 
-**Note:** No test framework or lint commands are configured. Run `next build` for type checking.
+**Type checking:** Run `next build` (no ESLint, Prettier, or standalone type-check script is configured).
+
+## Vitest Configuration
+
+- **Config:** `vitest.config.ts` — jsdom environment, globals enabled (no import needed for `describe`/`it`/`expect`), `@vitejs/plugin-react`, `@/` alias maps to project root
+- **Setup:** `vitest.setup.ts` imports `@testing-library/jest-dom/vitest`
+- **Location:** Tests in `__tests__/` directories adjacent to source files (e.g., `helpers/__tests__/get-stats.test.ts`)
+- **Pattern:** `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`
+- Currently only helpers are tested. For component tests, use `@testing-library/react` (`render`, `screen`, `fireEvent`).
 
 ## TypeScript Configuration
 
-- Strict mode enabled
-- Use `@/` path alias (e.g., `@/lib/utils`, `@/components/ui/button`)
-- Use `.source` for content files (e.g., `@/.source` maps to `.source/index.ts`)
-- Module resolution: `bundler`
+- Strict mode (`"strict": true`), `bundler` module resolution, `ESNext` target, `jsx: "preserve"`
+- Use `@/` path alias (maps to `./*`), `@/.source` for content files (maps to `.source/index.ts`)
 
 ## Code Style
 
 ### Imports
-- Use `@/` for internal imports (project root)
-- Use relative imports for sibling components in same directory
-- Group imports: external libs → internal libs → components
-- Use `type` keyword for type-only imports: `import { type SomeType }`
+- Use double quotes consistently (singe quotes only appear in test files)
+- Group imports: external libraries → internal `@/` → relative `./`
+- Use `type` keyword for type-only imports: `import { type VariantProps }`, `import type { Question }`
+- Merge type+value imports on one line: `import { clsx, type ClassValue }`
+- No barrel exports except in specific cases (e.g., `components/ai/index.tsx`)
 
 ### Components
-- Server components by default (no `"use client"` unless needed)
-- Use `cva` (class-variance-authority) for variant styles
-- Use `cn()` from `@/lib/utils` for className merging (wraps `clsx` + `tailwind-merge`)
-- Prefix UI components with proper names (e.g., `Button`, not `Btn`)
-- Extract complex client logic to separate `*.client.tsx` or `*Client.tsx` files
+- Server components by default (no `"use client"` unless needed for hooks/browser APIs)
+- Client components: first line `"use client"` (no semicolon)
+- UI primitives use named exports: `export { Button, buttonVariants }`
+- Pages use `export default function PageName()`
+- State/presentational components use either named or default (follow file's pattern)
+- Use `cva` for variant styles (see `components/ui/button.tsx`)
+- Use `cn()` from `@/lib/utils` for className merging
 - Use Radix UI for accessible component primitives
+- Use `data-slot` attribute on Radix primitives
+- For Radix components, extend via `React.ComponentProps<typeof Primitive.Root>`
 
 ### Naming
 - PascalCase for components and types: `QuizTimer`, `SearchResult`
 - camelCase for functions and variables: `getStats`, `userMessage`
 - UPPER_SNAKE for constants: `MAX_RETRIES`, `API_BASE_URL`
-- File naming: `page.tsx` (Next.js pages), `route.ts` (API routes), `*.client.tsx` (client components)
+- File naming: `page.tsx` (pages), `route.ts` (API routes), `*Client.tsx` or `*.client.tsx` (client sub-components)
+
+### Hooks
+- All custom hooks require `"use client"`
+- Prefer `export function useHookName()` over arrow functions
+- Define return type via explicit `interface` (e.g., `UseQuizFlowReturn`)
+- Wrap state setters in `useCallback`, derived state in `useMemo`
+- Hook composition pattern: orchestrator combines sub-hooks (see `hooks/use-quiz.ts`)
+- Sub-hooks live in `lib/hooks/` (domain-specific) or `hooks/` (top-level app hooks)
+
+### Server Actions
+- Located in `actions/` directory
+- Receive `unknown` input, validate with Zod schema
+- Use `try/catch` with `error: unknown`; throw for quota errors, return `{ error }` objects
+- Call from API routes (not directly from client components)
+- `maxDuration` exported at module level
 
 ### Styling
-- Use Tailwind CSS utility classes
-- Use semantic colors from design tokens where possible
-- Avoid arbitrary values; rely on design system
-- Use inline styles only for dynamic values (e.g., CSS variables)
-- Use `tw-animate-css` for animations when needed
+- Tailwind CSS v4 with `@import "tailwindcss"` (not `@tailwind` directives)
+- Use semantic color tokens: `bg-primary`, `text-muted-foreground`, `border-border`
+- Use `cn()` for class merging, `cva` for component variants
+- Avoid arbitrary values; use design tokens from `@theme inline` in `global.css`
+- Inline styles only for dynamic values (e.g., CSS gradients)
 
 ### Error Handling
-- Use `try/catch` with `console.error` for async operations
-- Return proper error responses in API routes
-- Use `react-error-boundary` for component-level error handling
+- `try/catch` with `error: unknown`, then `error instanceof Error` for type narrowing
+- Log with `console.error("context:", error)`
+- API routes return proper error responses via `NextResponse.json`
+- Component-level errors handled via `react-error-boundary`
+- Quota errors detected via `isQuotaError()` helper pattern
+- No custom Error classes used
 
 ### API Routes
-- Use `runtime = "edge"` for Edge Runtime (see `app/api/chat/route.ts`)
-- Parse request body with `await req.json()`
-- Return streaming responses with `result.toUIMessageStreamResponse()`
+- Edge Runtime for AI/quiz routes: `export const runtime = "edge"`
+- Parse body with `await req.json()`, return streaming with `result.toUIMessageStreamResponse()`
+- Server runtime for search/static routes
 
 ### LLM/AI Integration
-- Use `@ai-sdk/react` and `ai` package for AI features
+- Use `@ai-sdk/react` (`useChat`, `useObject`) and `ai` (`streamText`)
 - Define tool schemas with Zod (see `lib/chat/inkeep-qa-schema.ts`)
-- Use `convertToModelMessages` for message formatting
-- Support both OpenAI and OpenAI-compatible providers
+- Use `convertToModelMessages` for message formatting, support OpenAI-compatible providers
 
 ## File Organization
 
 ```
 app/                    # Next.js App Router pages
-  (home)/              # Route group (no URL segment)
-  api/                 # API routes (edge runtime)
+  (home)/              # Route group (home, quiz, blog, question)
+  api/                 # API routes (edge/server runtime)
   docs/                # Documentation pages
 components/
   ui/                  # Reusable UI primitives (Button, Card, etc.)
-  search/              # Search-related components
   ai/                  # AI/chat components
-lib/                   # Utilities and client code
+  search/              # Search-related components
+lib/                   # Utilities, services, hooks, schemas
+  services/            # Business logic (search, quiz, RAG pipelines)
   schemas/             # Zod schemas
   chat/                # Chat-related utilities
-data/                  # Static data files
-helpers/               # Helper functions
+  hooks/               # Domain-specific hooks (quiz sub-hooks)
+  contexts/            # React contexts
+hooks/                 # Top-level app hooks (use-quiz orchestrator, use-ai-chat)
+helpers/               # Pure functions with tests
 actions/               # Server actions
-source.config.ts       # Fumadocs content source config
-site.config.ts         # Site configuration
+data/                  # Static data files (nav, quiz topics, content tree)
+providers/             # Root-level providers (theme, Fumadocs)
 ```
 
 ## Content
 
-- MDX files go in `.source/` directory
-- Use Fumadocs frontmatter for metadata
-- Reference content via `@/.source` alias
-
-## Environment Variables
-
-Required for search and AI features:
-- `ALGOLIA_APP_ID`, `ALGOLIA_API_KEY`, `ALGOLIA_INDEX_NAME`
-- `OPENAI_API_KEY` (or compatible LLM provider)
-- `PINECONE_API_KEY`, `PINECONE_INDEX_NAME`
-
-Create `.env.local` for local development (do not commit).
+- MDX content in `content/docs/` and `content/blog/`, configured in `source.config.ts` (Fumadocs collections)
+- Access via `@/.source` alias
+- LLM-friendly text export at `/llms-full.txt` and `/llms.mdx/[[...slug]]`
 
 ## Design System
 
-Follow `DESIGN.md` for all new component creation. This ensures consistency with the project's visual identity.
-
-### Quick Reference
+Follow `DESIGN.md` for all new component creation. Quick reference:
 
 | Category | Usage |
 |----------|-------|
@@ -130,21 +141,14 @@ Follow `DESIGN.md` for all new component creation. This ensures consistency with
 | Radius | Buttons: `rounded-md` (8px), Cards: `rounded-xl` (12px) |
 | Shadows | `shadow` for cards, `shadow-md` for elevated surfaces |
 
-### Component Checklist
+Component checklist: use `cva`, semantic colors, correct radius, `cn()`, `data-slot` for Radix, light+dark mode, focus-visible states.
 
-When creating new UI components, ensure:
+## Environment Variables
 
-1. Use `cva` for variant styles (see `components/ui/button.tsx` pattern)
-2. Use semantic color tokens from `--color-*` CSS variables
-3. Apply correct border radius for component type
-4. Use `cn()` for className merging
-5. Set `data-slot` attribute for Radix compatibility
-6. Support both light and dark modes
-7. Add focus-visible states for accessibility
-
-**Do:** Use design tokens, support dark mode, set `lang="th"` for Thai content
-
-**Don't:** Hardcode colors, mix English/Thai fonts in same element, use arbitrary values
+Required for search and AI features:
+- `ALGOLIA_APP_ID`, `ALGOLIA_API_KEY`, `ALGOLIA_INDEX_NAME`
+- `OPENAI_API_KEY` (or compatible LLM provider)
+- `PINECONE_API_KEY`, `PINECONE_INDEX_NAME`
 
 ## Custom Skills
 

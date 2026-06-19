@@ -14,15 +14,15 @@ export function QuestionClient() {
   const { messages, stop, setMessages, status, sendMessage, regenerate } =
     useChat({
       transport: new DefaultChatTransport({
-        api: "/api/ai",
+        api: "/api/question",
       }),
       onError: (err) => {
         console.error("Chat error:", err);
         if (
-        err?.message?.includes("quota") ||
-        err?.message?.includes("429") ||
-        err?.message?.includes("Rate limit")
-      ) {
+          err?.message?.includes("quota") ||
+          err?.message?.includes("429") ||
+          err?.message?.includes("Rate limit")
+        ) {
           setError(
             "บริการ AI หมดโควต้าการใช้งาน กรุณาลองใหม่อีกครั้งในภายหลัง",
           );
@@ -31,7 +31,8 @@ export function QuestionClient() {
         }
       },
     });
-  // console.log(status);
+  console.log(status);
+  console.log(messages, "message on client");
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
