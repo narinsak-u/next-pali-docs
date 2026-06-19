@@ -1,18 +1,32 @@
-import { openai } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { convertToModelMessages, streamText, UIMessage } from "ai";
 import { runRAG } from "@/lib/services/rag-pipeline";
 
-export const maxDuration = 30;
+// change to use llm model from openrouter
+const openrouter = createOpenAICompatible({
+  name: "openrouter",
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: process.env.PROVIDER_API_KEY,
+});
+
+export const runtime = "nodejs";
+export const maxDuration = 120;
 
 export async function POST(req: Request) {
   try {
     const { messages }: { messages: UIMessage[] } = await req.json();
-
     const { context } = await runRAG(messages);
 
     const result = streamText({
-      model: openai("gpt-4o-mini"),
-      system: `You are a helpful assistant that answers questions about the Pali language. Use the context provided to answer the question. If the context does not provide the answer, say "I don't know".
+      model: openrouter(process.env.LLM_MODEL ?? "google/gemma-4-31b-it:free"),
+      system: `
+        You are a Pali language expert. Your responses should be informative yet concise,
+        focusing on accurate Pali language knowledge based on context.
+
+        When answering questions, prioritize clarity and brevity while maintaining accuracy.
+        If a question is outside the scope of the textbook content, kindly indicate that.
+
+        IMPORTANT: Your responses must never exceed 100 words.
 
         Context:
         ${context}`,

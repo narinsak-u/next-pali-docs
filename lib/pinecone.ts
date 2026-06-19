@@ -6,3 +6,4 @@ const pc = new Pinecone({
 
 export const index = pc.index(process.env.PINECONE_INDEX_NAME || '');
 export const environment = process.env.PINECONE_ENVIRONMENT || '';
+export { pc };
