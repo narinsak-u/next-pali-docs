@@ -1,7 +1,6 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-// import { Markdown } from "@/components/ai/markdown";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { Loader2, RefreshCw, Send, User, Bot, Trash2 } from "lucide-react";
