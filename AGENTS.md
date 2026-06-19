@@ -96,7 +96,7 @@ Next.js 15 documentation site for Pali language learning (App Router, TypeScript
 
 ### LLM/AI Integration
 - Use `@ai-sdk/react` (`useChat`, `useObject`) and `ai` (`streamText`)
-- Define tool schemas with Zod (see `lib/chat/inkeep-qa-schema.ts`)
+- Define tool schemas with Zod
 - Use `convertToModelMessages` for message formatting, support OpenAI-compatible providers
 
 ## File Organization

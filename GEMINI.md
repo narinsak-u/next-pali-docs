@@ -36,7 +36,7 @@ components/
   search/              # Algolia/Search UI
 content/               # MDX content files (Docs and Blog)
 lib/                   # Shared utilities, schemas, and AI logic
-  chat/                # Inkeep/AI tool schemas
+  chat/                # AI chat utilities
   schemas/             # Zod schemas (Quiz, etc.)
 helpers/               # Helper functions (mapping, stats)
 data/                  # Static configuration and data
@@ -72,8 +72,7 @@ scripts/               # Maintenance scripts (e.g., search indexing)
 - **Variants:** Use `cva` for component variants (see `components/ui/button.tsx`).
 
 ### AI & Chat
-- API routes for chat are typically in `app/api/chat/route.ts` using the **Edge Runtime**.
-- Tool calling and schemas are defined in `lib/chat/`.
+- The RAG chat API is in `app/api/question/route.ts`.
 - Use `convertToModelMessages` for properly formatting history for the AI SDK.
 
 ### Content Management
