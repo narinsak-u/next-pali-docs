@@ -43,7 +43,7 @@ export default function AISearch(props: DialogProps) {
   const chat = useChat({
     id: "search",
     transport: new DefaultChatTransport({
-      api: "/api/chat",
+      api: "/api/question",
     }),
   });
 
