@@ -28,9 +28,11 @@ function isDataPart(p: UIMessage["parts"][number]): p is DataPart {
 
 export function AIMessage({
   message,
+  consumedSuggestionMsgIds,
   onSelectSuggestion,
 }: {
   message: UIMessage;
+  consumedSuggestionMsgIds?: Set<string>;
   onSelectSuggestion: (text: string) => void;
 }) {
   const parts = Array.isArray(message.parts) ? message.parts : [];
@@ -121,7 +123,7 @@ export function AIMessage({
         </ProcessBadge>
       )}
 
-      {suggestionParts.map((p, i) => (
+      {!consumedSuggestionMsgIds?.has(message.id) && suggestionParts.map((p, i) => (
         <SuggestionStep
           key={`s-${i}`}
           suggestions={p.data.suggestions}

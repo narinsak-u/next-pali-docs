@@ -31,7 +31,7 @@ export function ProcessStepsInline({
         <TimelineRail steps={steps} />
         <div className="flex flex-col gap-2 flex-1 min-w-0">
           {reasoning.map((p, i) => (
-            <ReasoningStep key={`r-${i}`} summary={p.data.summary} />
+            <ReasoningStep key={`r-${i}`} summary={p.data.summary} excerpts={p.data.excerpts} />
           ))}
           {tasks.map((t, i) => (
             <TaskStep

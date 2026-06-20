@@ -162,6 +162,24 @@ describe("AIMessage", () => {
     expect(onSelect).toHaveBeenCalledWith("q2");
   });
 
+  it("hides suggestions when the message id is in consumedSuggestionMsgIds", () => {
+    const msg = buildMessage([
+      { type: "text", text: "answer" },
+      { type: "data-suggestions", data: { suggestions: ["q1", "q2", "q3"] } },
+    ], "m-42");
+
+    render(
+      <AIMessage
+        message={msg}
+        consumedSuggestionMsgIds={new Set(["m-42"])}
+        onSelectSuggestion={() => {}}
+      />,
+    );
+
+    expect(screen.getByTestId("response-step")).toBeInTheDocument();
+    expect(screen.queryByTestId("suggestion-step")).not.toBeInTheDocument();
+  });
+
   it("renders nothing meaningful for an empty message (no crash)", () => {
     const msg = buildMessage([]);
     const { container } = render(<AIMessage message={msg} onSelectSuggestion={() => {}} />);

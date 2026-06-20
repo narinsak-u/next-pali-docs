@@ -67,16 +67,17 @@ describe("ai-data-parts", () => {
     expect(() => taskStatusSchema.parse("paused")).toThrow();
   });
 
-  it("accepts exactly 3 suggestions", () => {
+  it("accepts 1-to-3 suggestions", () => {
     expect(
-      suggestionsPartSchema.parse({
-        suggestions: ["q1", "q2", "q3"],
-      }),
+      suggestionsPartSchema.parse({ suggestions: ["q1"] }),
+    ).toEqual({ suggestions: ["q1"] });
+    expect(
+      suggestionsPartSchema.parse({ suggestions: ["q1", "q2", "q3"] }),
     ).toEqual({ suggestions: ["q1", "q2", "q3"] });
   });
 
-  it("rejects more or fewer than 3 suggestions", () => {
-    expect(() => suggestionsPartSchema.parse({ suggestions: ["q1", "q2"] })).toThrow();
+  it("rejects empty or too many suggestions", () => {
+    expect(() => suggestionsPartSchema.parse({ suggestions: [] })).toThrow();
     expect(() =>
       suggestionsPartSchema.parse({ suggestions: ["q1", "q2", "q3", "q4"] }),
     ).toThrow();

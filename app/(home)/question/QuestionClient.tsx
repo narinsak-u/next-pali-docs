@@ -6,6 +6,7 @@ import { useAIChat, AIMessage, ChatInput } from "@/components/ai";
 
 export function QuestionClient() {
   const [input, setInput] = useState("");
+  const [consumedSuggestionMsgIds, setConsumedSuggestionMsgIds] = useState<Set<string>>(new Set());
   const { messages, status, error, sendMessage, regenerate, stop, clear } = useAIChat();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -51,8 +52,10 @@ export function QuestionClient() {
             <AIMessage
               key={m.id}
               message={m}
+              consumedSuggestionMsgIds={consumedSuggestionMsgIds}
               onSelectSuggestion={(text) => {
                 setInput("");
+                setConsumedSuggestionMsgIds(prev => new Set(prev).add(m.id));
                 void sendMessage({ text });
               }}
             />

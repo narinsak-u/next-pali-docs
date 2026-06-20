@@ -6,7 +6,7 @@ import type { ReasoningPart, TaskPart } from "@/lib/schemas/ai-data-parts";
 
 export interface ProcessDetailsProps {
   steps: StepDescriptor[];
-  reasoning: Array<{ summary: string }>;
+  reasoning: Array<{ summary: string; excerpts?: string[] }>;
   tasks: Array<{
     id?: string;
     label: string;
@@ -23,7 +23,7 @@ export function ProcessDetails({ steps, reasoning, tasks }: ProcessDetailsProps)
       <TimelineRail steps={steps} />
       <div className="flex flex-col gap-2 flex-1 min-w-0">
         {reasoning.map((r, i) => (
-          <ReasoningStep key={`r-${i}`} summary={r.summary} />
+          <ReasoningStep key={`r-${i}`} summary={r.summary} excerpts={r.excerpts} />
         ))}
         {tasks.map((t, i) => (
           <TaskStep

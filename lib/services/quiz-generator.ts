@@ -1,5 +1,5 @@
 import { streamObject } from "ai";
-import { openrouter } from "@/lib/services/openrouter-client";
+import { llm, getDefaultModel } from "@/lib/services/llm-provider";
 import { quizResponseSchema } from "@/lib/schemas/quiz";
 
 export interface QuizGenerationInput {
@@ -10,7 +10,7 @@ export interface QuizGenerationInput {
 
 export async function generateQuizResponse(input: QuizGenerationInput) {
   const result = streamObject({
-    model: openrouter(process.env.LLM_MODEL ?? "google/gemma-4-31b-it:free"),
+    model: llm(getDefaultModel()),
     schema: quizResponseSchema,
     prompt: `
     Using this context as reference: ${input.context}

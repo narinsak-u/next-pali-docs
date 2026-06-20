@@ -4,6 +4,7 @@ export const taskStatusSchema = z.enum(["pending", "running", "done", "error"]);
 
 export const reasoningPartSchema = z.object({
   summary: z.string().min(1),
+  excerpts: z.array(z.string()).optional(),
 });
 
 export const taskPartSchema = z.object({
@@ -16,7 +17,7 @@ export const taskPartSchema = z.object({
 });
 
 export const suggestionsPartSchema = z.object({
-  suggestions: z.array(z.string().min(1)).length(3),
+  suggestions: z.array(z.string().min(1)).min(1).max(3),
 });
 
 export type ReasoningPart = z.infer<typeof reasoningPartSchema>;

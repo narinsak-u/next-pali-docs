@@ -9,7 +9,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import { searchDocuments } from "@/lib/services/rag-pipeline";
-import { openrouter } from "@/lib/services/openrouter-client";
+import { llm, getDefaultModel } from "@/lib/services/llm-provider";
 import { PALI_EXPERT_SYSTEM_PROMPT } from "@/lib/chat/pali-system-prompt";
 import { formatContext, type DocumentMatch } from "@/lib/services/vector-store";
 
@@ -27,32 +27,40 @@ export async function POST(req: Request) {
     const stream = createUIMessageStream({
       originalMessages: messages,
       execute: async ({ writer }) => {
+        let searchCompleted = false;
+        let cachedResult: { matches: DocumentMatch[] } | null = null;
         let suggestionsGenerated = false;
 
         const result = streamText({
-          model: openrouter(
-            process.env.LLM_MODEL ?? "google/gemma-4-31b-it:free",
-          ),
+          model: llm(getDefaultModel()),
           system: PALI_EXPERT_SYSTEM_PROMPT,
           messages: convertToModelMessages(messages),
-          stopWhen: stepCountIs(2),
+          stopWhen: stepCountIs(5),
           tools: {
             searchDocs: tool({
               description:
                 "Search the Pali textbook corpus for relevant passages.",
               inputSchema: z.object({ query: z.string().min(1) }),
               execute: async ({ query }, { toolCallId }) => {
+                if (searchCompleted && cachedResult) {
+                  writer.write({
+                    type: "data-task",
+                    data: { id: toolCallId, label: "ค้นหาเอกสาร", status: "done", matchCount: cachedResult.matches.length },
+                  });
+                  return cachedResult;
+                }
+                searchCompleted = true;
                 writer.write({
                   type: "data-task",
-                  id: toolCallId,
-                  data: { label: "ค้นหาเอกสาร", status: "running", query },
+                  data: { id: toolCallId, label: "ค้นหาเอกสาร", status: "running", query },
                 });
                 try {
                   const { matches } = await searchDocuments(query);
+                  cachedResult = { matches };
                   writer.write({
                     type: "data-task",
-                    id: toolCallId,
                     data: {
+                      id: toolCallId,
                       label: "ค้นหาเอกสาร",
                       status: "done",
                       matchCount: matches.length,
@@ -74,8 +82,7 @@ export async function POST(req: Request) {
                     e instanceof Error ? e.message : "search failed";
                   writer.write({
                     type: "data-task",
-                    id: toolCallId,
-                    data: { label: "ค้นหาเอกสาร", status: "error", message },
+                    data: { id: toolCallId, label: "ค้นหาเอกสาร", status: "error", message },
                   });
                   return { matches: [] };
                 }
