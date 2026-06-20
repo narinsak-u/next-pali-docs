@@ -53,11 +53,13 @@ import { z } from "zod";
 import { searchDocuments } from "@/lib/services/rag-pipeline";
 import { generateSuggestions } from "@/lib/services/suggestions";
 
-export const runtime = "nodejs";
+export const runtime = "nodejs"; // current route is nodejs; keep as-is. The second LLM call (suggestions) benefits from node, and there is no Edge-only API in use.
 export const maxDuration = 120;
 
 export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
+  let lastMatchCount = 0;
+  let lastAnswer = "";
 
   const stream = createUIMessageStream({
     originalMessages: messages,
@@ -77,6 +79,7 @@ export async function POST(req: Request) {
                 data: { label: "ค้นหาเอกสาร", status: "running", query },
               });
               const { matches } = await searchDocuments(query);
+              lastMatchCount = matches.length;
               writer.write({
                 type: "data-task",
                 id: toolCallId,
@@ -90,18 +93,24 @@ export async function POST(req: Request) {
             },
           }),
         },
+        onFinish: ({ text }) => { lastAnswer = text; },
       });
 
-      // Merge the streamed text into the UI message stream
       writer.merge(result.toUIMessageStream({ sendReasoning: false }));
-
-      // After the answer, generate follow-up suggestions if we had matches
-      const toolResult = await result.toolCalls;
-      // (decide groundedness from the last searchDocs result)
-      // Then conditionally write data-suggestions.
+      await result.consumeStream();
     },
-    onFinish: async ({ responseMessage }) => {
-      // ...generate suggestions if grounded
+    onFinish: async () => {
+      if (lastMatchCount === 0 || !lastAnswer) return;
+      try {
+        const suggestions = await generateSuggestions(lastAnswer);
+        // data-suggestions is written via a final writer call; in v5 this is
+        // typically done with writer.write before the stream closes. If the
+        // helper exposes a `finalWrite`, use that; otherwise call out to a
+        // a second stream. Implementation will pin the exact API during
+        // planning.
+      } catch {
+        // silent skip on suggestion failure (graceful degradation)
+      }
     },
   });
 
@@ -183,7 +192,7 @@ public surface for any future callers.
 ## Data Flow (one turn)
 
 1. User submits in `QuestionClient` → `useAIChat().sendMessage(text)`
-2. `POST /api/question` opens a `createUIMessageStream` (Node runtime, 120s)
+2. `POST /api/question` opens a `createUIMessageStream` (Node runtime, `maxDuration = 120`)
 3. `streamText` runs with the `searchDocs` tool
 4. **Reasoning + Task:** if the model calls `searchDocs`:
    - `data-task` (running) is written with the query
