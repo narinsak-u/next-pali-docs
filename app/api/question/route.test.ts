@@ -6,10 +6,27 @@ vi.mock("ai", () => {
     inputSchema?: unknown;
     execute?: (input: unknown, options: { toolCallId: string }) => Promise<unknown>;
   };
-  let capturedTool: CapturedTool | null = null;
+  type PrepareStepFn = (args: {
+    steps: Array<{
+      toolResults: Array<{
+        toolName: string;
+        output: unknown;
+      }>;
+    }>;
+    stepNumber: number;
+    model: unknown;
+    messages: unknown[];
+  }) => Promise<{ system?: string; messages?: unknown[] } | undefined>;
 
-  const streamTextMock = vi.fn((opts: { tools?: Record<string, CapturedTool> }) => {
+  let capturedTool: CapturedTool | null = null;
+  let capturedPrepareStep: PrepareStepFn | null = null;
+
+  const streamTextMock = vi.fn((opts: {
+    tools?: Record<string, CapturedTool>;
+    prepareStep?: PrepareStepFn;
+  }) => {
     capturedTool = opts.tools?.searchDocs ?? null;
+    capturedPrepareStep = opts.prepareStep ?? null;
     return {
       toUIMessageStream: vi.fn(() => {
         return new ReadableStream({
@@ -54,6 +71,9 @@ vi.mock("ai", () => {
     streamText: streamTextMock,
     convertToModelMessages: vi.fn((m: unknown) => m),
     tool: vi.fn((opts: CapturedTool) => opts),
+    __internals: {
+      getCapturedPrepareStep: () => capturedPrepareStep,
+    },
   };
 });
 
@@ -69,13 +89,24 @@ vi.mock("@/lib/chat/pali-system-prompt", () => ({
 vi.mock("@/lib/services/suggestions", () => ({
   generateSuggestions: vi.fn(),
 }));
+vi.mock("@/lib/services/vector-store", () => ({
+  formatContext: vi.fn((matches: Array<{ text: string }>) =>
+    matches.map((m) => m.text).join("|MOCK|"),
+  ),
+}));
 
 import { POST } from "./route";
 import { searchDocuments } from "@/lib/services/rag-pipeline";
 import { generateSuggestions } from "@/lib/services/suggestions";
+import { formatContext } from "@/lib/services/vector-store";
+import * as aiMock from "ai";
 
 const mockedSearch = vi.mocked(searchDocuments);
 const mockedGenerateSuggestions = vi.mocked(generateSuggestions);
+const mockedFormatContext = vi.mocked(formatContext);
+const aiMockInternals = (aiMock as unknown as {
+  __internals: { getCapturedPrepareStep: () => unknown };
+}).__internals;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -95,7 +126,10 @@ type WriterMock = {
 describe("POST /api/question", () => {
   it("emits data-task (running, done) and data-reasoning when searchDocs returns matches", async () => {
     mockedSearch.mockResolvedValue({
-      matches: [{ id: "a" } as never, { id: "b" } as never],
+      matches: [
+        { id: "a", score: 0.9, text: "passage A" },
+        { id: "b", score: 0.8, text: "passage B" },
+      ],
       context: "ctx",
     });
     mockedGenerateSuggestions.mockResolvedValue(["q1", "q2", "q3"]);
@@ -170,5 +204,136 @@ describe("POST /api/question", () => {
     );
     expect(errored).toBeDefined();
     expect((errored!.data as { message: string }).message).toMatch(/Pinecone/);
+  });
+
+  it("calls formatContext with the matches when searchDocs returns matches", async () => {
+    const matches = [
+      { id: "a", score: 0.9, text: "passage A" },
+      { id: "b", score: 0.8, text: "passage B" },
+    ];
+    mockedSearch.mockResolvedValue({ matches, context: "ctx" });
+    mockedGenerateSuggestions.mockResolvedValue(["q1", "q2", "q3"]);
+
+    await POST(
+      makeReq({
+        messages: [{ id: "1", role: "user", parts: [{ type: "text", text: "q" }] }],
+      }),
+    );
+
+    const prepareStep = aiMockInternals.getCapturedPrepareStep() as (args: {
+      steps: Array<{
+        toolResults: Array<{ toolName: string; output: unknown }>;
+      }>;
+      stepNumber: number;
+      model: unknown;
+      messages: unknown[];
+    }) => Promise<{ system?: string; messages?: unknown[] } | undefined>;
+
+    expect(prepareStep).toBeDefined();
+
+    await prepareStep({
+      steps: [
+        {
+          toolResults: [
+            {
+              toolName: "searchDocs",
+              output: { matches },
+            },
+          ],
+        },
+      ],
+      stepNumber: 1,
+      model: {},
+      messages: [],
+    });
+
+    expect(mockedFormatContext).toHaveBeenCalledOnce();
+    expect(mockedFormatContext).toHaveBeenCalledWith(matches);
+  });
+
+  it("prepareStep injects formatted context into the system prompt for the answer step", async () => {
+    const matches = [
+      { id: "a", score: 0.9, text: "passage A" },
+      { id: "b", score: 0.8, text: "passage B" },
+    ];
+    mockedSearch.mockResolvedValue({ matches, context: "ctx" });
+    mockedGenerateSuggestions.mockResolvedValue(["q1", "q2", "q3"]);
+
+    await POST(
+      makeReq({
+        messages: [{ id: "1", role: "user", parts: [{ type: "text", text: "q" }] }],
+      }),
+    );
+
+    const prepareStep = aiMockInternals.getCapturedPrepareStep() as (args: {
+      steps: Array<{
+        toolResults: Array<{ toolName: string; output: unknown }>;
+      }>;
+      stepNumber: number;
+      model: unknown;
+      messages: unknown[];
+    }) => Promise<{ system?: string; messages?: unknown[] } | undefined>;
+
+    expect(prepareStep).toBeDefined();
+
+    const result = await prepareStep({
+      steps: [
+        {
+          toolResults: [
+            {
+              toolName: "searchDocs",
+              output: { matches },
+            },
+          ],
+        },
+      ],
+      stepNumber: 1,
+      model: {},
+      messages: [],
+    });
+
+    expect(result).toBeDefined();
+    expect(result?.system).toContain("passage A|MOCK|passage B");
+    expect(result?.system).toContain("PROMPT");
+  });
+
+  it("prepareStep returns undefined when matches is empty (no context injection)", async () => {
+    mockedSearch.mockResolvedValue({ matches: [], context: "" });
+
+    await POST(
+      makeReq({
+        messages: [{ id: "1", role: "user", parts: [{ type: "text", text: "q" }] }],
+      }),
+    );
+
+    const prepareStep = aiMockInternals.getCapturedPrepareStep() as (args: {
+      steps: Array<{
+        toolResults: Array<{ toolName: string; output: unknown }>;
+      }>;
+      stepNumber: number;
+      model: unknown;
+      messages: unknown[];
+    }) => Promise<{ system?: string; messages?: unknown[] } | undefined>;
+
+    expect(prepareStep).toBeDefined();
+
+    const result = await prepareStep({
+      steps: [
+        {
+          toolResults: [
+            {
+              toolName: "searchDocs",
+              output: { matches: [] },
+            },
+          ],
+        },
+      ],
+      stepNumber: 1,
+      model: {},
+      messages: [],
+    });
+
+    expect(result).toBeUndefined();
+    expect(mockedFormatContext).not.toHaveBeenCalled();
   });
 });

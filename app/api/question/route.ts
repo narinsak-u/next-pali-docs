@@ -11,9 +11,17 @@ import { searchDocuments } from "@/lib/services/rag-pipeline";
 import { openrouter } from "@/lib/services/openrouter-client";
 import { PALI_EXPERT_SYSTEM_PROMPT } from "@/lib/chat/pali-system-prompt";
 import { generateSuggestions } from "@/lib/services/suggestions";
+import {
+  formatContext,
+  type DocumentMatch,
+} from "@/lib/services/vector-store";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
+
+function buildSystemWithContext(baseSystem: string, context: string): string {
+  return `${baseSystem}\n\nContext from Pali textbook corpus:\n${context}`;
+}
 
 export async function POST(req: Request) {
   try {
@@ -72,6 +80,32 @@ export async function POST(req: Request) {
                 }
               },
             }),
+          },
+          prepareStep: async ({ steps }) => {
+            for (const step of steps) {
+              for (const tr of step.toolResults) {
+                if (
+                  tr.toolName === "searchDocs" &&
+                  tr.output &&
+                  typeof tr.output === "object" &&
+                  "matches" in tr.output
+                ) {
+                  const matches = (
+                    tr.output as { matches: DocumentMatch[] }
+                  ).matches;
+                  if (matches.length > 0) {
+                    const context = formatContext(matches);
+                    return {
+                      system: buildSystemWithContext(
+                        PALI_EXPERT_SYSTEM_PROMPT,
+                        context,
+                      ),
+                    };
+                  }
+                }
+              }
+            }
+            return undefined;
           },
         });
 
