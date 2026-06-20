@@ -19,18 +19,26 @@ vi.mock("ai", () => {
   }) => Promise<{ system?: string; messages?: unknown[] } | undefined>;
 
   let capturedTool: CapturedTool | null = null;
+  let capturedSuggestTool: CapturedTool | null = null;
   let capturedPrepareStep: PrepareStepFn | null = null;
+  let capturedStopWhen: unknown = null;
 
   const streamTextMock = vi.fn((opts: {
     tools?: Record<string, CapturedTool>;
     prepareStep?: PrepareStepFn;
+    stopWhen?: unknown;
   }) => {
     capturedTool = opts.tools?.searchDocs ?? null;
+    capturedSuggestTool = opts.tools?.suggestQuestions ?? null;
     capturedPrepareStep = opts.prepareStep ?? null;
+    capturedStopWhen = opts.stopWhen;
     return {
-      toUIMessageStream: vi.fn(() => {
+      toUIMessageStream: vi.fn((opts?: { sendReasoning?: boolean }) => {
         return new ReadableStream({
           start(controller) {
+            controller.enqueue({ type: "text-start", id: "t-1" });
+            controller.enqueue({ type: "text-delta", id: "t-1", delta: "mock answer text" });
+            controller.enqueue({ type: "text-end", id: "t-1" });
             controller.close();
           },
         });
@@ -48,16 +56,30 @@ vi.mock("ai", () => {
     (opts: {
       execute: (args: { writer: unknown }) => Promise<void> | void;
     }) => {
+      const mergePromises: Promise<void>[] = [];
       const writer = {
-        writes: [] as Array<{ type: string; data: unknown; id?: string }>,
-        write: vi.fn((w: { type: string; data: unknown; id?: string }) =>
+        writes: [] as Array<Record<string, unknown>>,
+        write: vi.fn((w: Record<string, unknown>) =>
           writer.writes.push(w),
         ),
-        merge: vi.fn(),
+        merge: vi.fn((stream: ReadableStream<Record<string, unknown>>) => {
+          mergePromises.push(
+            (async () => {
+              const reader = stream.getReader();
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                writer.writes.push(value);
+              }
+            })(),
+          );
+        }),
       };
-      return Promise.resolve(opts.execute({ writer })).then(() => {
-        return { body: { writer } };
-      });
+      return Promise.resolve(opts.execute({ writer }))
+        .then(() => Promise.all(mergePromises))
+        .then(() => {
+          return { body: { writer } };
+        });
     },
   );
 
@@ -70,9 +92,12 @@ vi.mock("ai", () => {
     createUIMessageStreamResponse: createUIMessageStreamResponseMock,
     streamText: streamTextMock,
     convertToModelMessages: vi.fn((m: unknown) => m),
+    stepCountIs: vi.fn((count: number) => ({ steps }: { steps: unknown[] }) => steps.length === count),
     tool: vi.fn((opts: CapturedTool) => opts),
     __internals: {
       getCapturedPrepareStep: () => capturedPrepareStep,
+      getCapturedStopWhen: () => capturedStopWhen,
+      getCapturedSuggestTool: () => capturedSuggestTool,
     },
   };
 });
@@ -86,9 +111,6 @@ vi.mock("@/lib/services/openrouter-client", () => ({
 vi.mock("@/lib/chat/pali-system-prompt", () => ({
   PALI_EXPERT_SYSTEM_PROMPT: "PROMPT",
 }));
-vi.mock("@/lib/services/suggestions", () => ({
-  generateSuggestions: vi.fn(),
-}));
 vi.mock("@/lib/services/vector-store", () => ({
   formatContext: vi.fn((matches: Array<{ text: string }>) =>
     matches.map((m) => m.text).join("|MOCK|"),
@@ -97,15 +119,17 @@ vi.mock("@/lib/services/vector-store", () => ({
 
 import { POST } from "@/app/api/question/route";
 import { searchDocuments } from "@/lib/services/rag-pipeline";
-import { generateSuggestions } from "@/lib/services/suggestions";
 import { formatContext } from "@/lib/services/vector-store";
 import * as aiMock from "ai";
 
 const mockedSearch = vi.mocked(searchDocuments);
-const mockedGenerateSuggestions = vi.mocked(generateSuggestions);
 const mockedFormatContext = vi.mocked(formatContext);
 const aiMockInternals = (aiMock as unknown as {
-  __internals: { getCapturedPrepareStep: () => unknown };
+  __internals: {
+    getCapturedPrepareStep: () => unknown;
+    getCapturedStopWhen: () => unknown;
+    getCapturedSuggestTool: () => unknown;
+  };
 }).__internals;
 
 beforeEach(() => {
@@ -120,7 +144,7 @@ function makeReq(body: unknown): Request {
 }
 
 type WriterMock = {
-  writes: Array<{ type: string; data: unknown; id?: string }>;
+  writes: Array<Record<string, unknown>>;
 };
 
 describe("POST /api/question", () => {
@@ -132,7 +156,6 @@ describe("POST /api/question", () => {
       ],
       context: "ctx",
     });
-    mockedGenerateSuggestions.mockResolvedValue(["q1", "q2", "q3"]);
 
     const result = (await POST(
       makeReq({
@@ -141,6 +164,12 @@ describe("POST /api/question", () => {
         ],
       }),
     )) as unknown as { body: { writer: WriterMock } };
+
+    const stopWhen = aiMockInternals.getCapturedStopWhen() as
+      ((args: { steps: unknown[] }) => boolean) | null;
+    expect(stopWhen).toBeDefined();
+    expect(stopWhen!({ steps: [] })).toBe(false);
+    expect(stopWhen!({ steps: [1, 2] })).toBe(true);
 
     const writes = result.body.writer.writes;
     const taskRunning = writes.find(
@@ -157,38 +186,6 @@ describe("POST /api/question", () => {
     expect((taskDone!.data as { matchCount: number }).matchCount).toBe(2);
     expect(reasoning).toBeDefined();
     expect((reasoning!.data as { summary: string }).summary).toMatch(/2/);
-  });
-
-  it("skips data-suggestions when matches is empty", async () => {
-    mockedSearch.mockResolvedValue({ matches: [], context: "" });
-    const result = (await POST(
-      makeReq({
-        messages: [{ id: "1", role: "user", parts: [{ type: "text", text: "hi" }] }],
-      }),
-    )) as unknown as { body: { writer: WriterMock } };
-
-    const suggestionWrites = result.body.writer.writes.filter(
-      (w) => w.type === "data-suggestions",
-    );
-    expect(suggestionWrites).toHaveLength(0);
-    expect(mockedGenerateSuggestions).not.toHaveBeenCalled();
-  });
-
-  it("emits data-suggestions when matches > 0", async () => {
-    mockedSearch.mockResolvedValue({ matches: [{ id: "a" } as never], context: "ctx" });
-    mockedGenerateSuggestions.mockResolvedValue(["q1", "q2", "q3"]);
-
-    const result = (await POST(
-      makeReq({
-        messages: [{ id: "1", role: "user", parts: [{ type: "text", text: "x" }] }],
-      }),
-    )) as unknown as { body: { writer: WriterMock } };
-
-    const suggestionWrites = result.body.writer.writes.filter(
-      (w) => w.type === "data-suggestions",
-    );
-    expect(suggestionWrites.length).toBeGreaterThanOrEqual(1);
-    expect(mockedGenerateSuggestions).toHaveBeenCalledOnce();
   });
 
   it("emits data-task with status=error when searchDocuments throws", async () => {
@@ -212,7 +209,6 @@ describe("POST /api/question", () => {
       { id: "b", score: 0.8, text: "passage B" },
     ];
     mockedSearch.mockResolvedValue({ matches, context: "ctx" });
-    mockedGenerateSuggestions.mockResolvedValue(["q1", "q2", "q3"]);
 
     await POST(
       makeReq({
@@ -257,7 +253,6 @@ describe("POST /api/question", () => {
       { id: "b", score: 0.8, text: "passage B" },
     ];
     mockedSearch.mockResolvedValue({ matches, context: "ctx" });
-    mockedGenerateSuggestions.mockResolvedValue(["q1", "q2", "q3"]);
 
     await POST(
       makeReq({
@@ -335,5 +330,52 @@ describe("POST /api/question", () => {
 
     expect(result).toBeUndefined();
     expect(mockedFormatContext).not.toHaveBeenCalled();
+  });
+
+  it("suggestQuestions tool writes data-suggestions when called", async () => {
+    mockedSearch.mockResolvedValue({ matches: [{ id: "a", score: 0.9, text: "t" }], context: "ctx" });
+
+    await POST(
+      makeReq({
+        messages: [{ id: "1", role: "user", parts: [{ type: "text", text: "q" }] }],
+      }),
+    );
+
+    const suggestTool = aiMockInternals.getCapturedSuggestTool() as {
+      execute?: (input: { suggestions: string[] }) => Promise<unknown>;
+    } | null;
+
+    expect(suggestTool).toBeDefined();
+    expect(suggestTool!.execute).toBeDefined();
+
+    const result = await suggestTool!.execute!(
+      { suggestions: ["q1", "q2", "q3"] },
+      { toolCallId: "tc-suggest" },
+    );
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("suggestQuestions tool rejects 0 suggestions", async () => {
+    mockedSearch.mockResolvedValue({ matches: [{ id: "a", score: 0.9, text: "t" }], context: "ctx" });
+
+    await POST(
+      makeReq({
+        messages: [{ id: "1", role: "user", parts: [{ type: "text", text: "q" }] }],
+      }),
+    );
+
+    const suggestTool = aiMockInternals.getCapturedSuggestTool() as {
+      execute?: (input: { suggestions: string[] }) => Promise<unknown>;
+    } | null;
+
+    expect(suggestTool).toBeDefined();
+
+    const result = await suggestTool!.execute!(
+      { suggestions: [] },
+      { toolCallId: "tc-empty" },
+    );
+
+    expect(result).toEqual({ ok: false });
   });
 });
