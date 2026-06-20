@@ -1,6 +1,16 @@
-import { convertToModelMessages, streamText, UIMessage } from "ai";
-import { runRAG } from "@/lib/services/rag-pipeline";
+import {
+  convertToModelMessages,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  streamText,
+  tool,
+  type UIMessage,
+} from "ai";
+import { z } from "zod";
+import { searchDocuments } from "@/lib/services/rag-pipeline";
 import { openrouter } from "@/lib/services/openrouter-client";
+import { PALI_EXPERT_SYSTEM_PROMPT } from "@/lib/chat/pali-system-prompt";
+import { generateSuggestions } from "@/lib/services/suggestions";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -8,25 +18,80 @@ export const maxDuration = 120;
 export async function POST(req: Request) {
   try {
     const { messages }: { messages: UIMessage[] } = await req.json();
-    const { context } = await runRAG(messages);
 
-    const result = streamText({
-      model: openrouter(process.env.LLM_MODEL ?? "google/gemma-4-31b-it:free"),
-      system: `
-        You are a Pali language expert. Your responses should be informative yet concise,
-        focusing on accurate Pali language knowledge based on context.
+    let lastMatchCount = 0;
+    let lastAnswer = "";
 
-        When answering questions, prioritize clarity and brevity while maintaining accuracy.
-        If a question is outside the scope of the textbook content, kindly indicate that.
+    const stream = createUIMessageStream({
+      originalMessages: messages,
+      execute: async ({ writer }) => {
+        const result = streamText({
+          model: openrouter(process.env.LLM_MODEL ?? "google/gemma-4-31b-it:free"),
+          system: PALI_EXPERT_SYSTEM_PROMPT,
+          messages: convertToModelMessages(messages),
+          tools: {
+            searchDocs: tool({
+              description:
+                "Search the Pali textbook corpus for relevant passages.",
+              inputSchema: z.object({ query: z.string().min(1) }),
+              execute: async ({ query }, { toolCallId }) => {
+                writer.write({
+                  type: "data-task",
+                  id: toolCallId,
+                  data: { label: "ค้นหาเอกสาร", status: "running", query },
+                });
+                try {
+                  const { matches } = await searchDocuments(query);
+                  lastMatchCount = matches.length;
+                  writer.write({
+                    type: "data-task",
+                    id: toolCallId,
+                    data: {
+                      label: "ค้นหาเอกสาร",
+                      status: "done",
+                      matchCount: matches.length,
+                    },
+                  });
+                  writer.write({
+                    type: "data-reasoning",
+                    data: {
+                      summary: `พบเอกสารที่เกี่ยวข้อง ${matches.length} รายการ`,
+                    },
+                  });
+                  return { matches };
+                } catch (e: unknown) {
+                  const message =
+                    e instanceof Error ? e.message : "search failed";
+                  writer.write({
+                    type: "data-task",
+                    id: toolCallId,
+                    data: { label: "ค้นหาเอกสาร", status: "error", message },
+                  });
+                  lastMatchCount = 0;
+                  return { matches: [] };
+                }
+              },
+            }),
+          },
+        });
 
-        IMPORTANT: Your responses must never exceed 100 words.
+        writer.merge(result.toUIMessageStream({ sendReasoning: false }));
+        await result.consumeStream();
 
-        Context:
-        ${context}`,
-      messages: convertToModelMessages(messages),
+        lastAnswer = await result.text;
+
+        if (lastMatchCount > 0 && lastAnswer) {
+          try {
+            const suggestions = await generateSuggestions(lastAnswer);
+            writer.write({ type: "data-suggestions", data: { suggestions } });
+          } catch {
+            // silent skip
+          }
+        }
+      },
     });
 
-    return result.toUIMessageStreamResponse();
+    return createUIMessageStreamResponse({ stream }) as unknown as Response;
   } catch (error: unknown) {
     console.error("Question API error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
