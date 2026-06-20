@@ -8,7 +8,7 @@ vi.mock("@/lib/services/vector-store", () => ({
   formatContext: vi.fn((m: unknown[]) => `ctx(${m.length})`),
 }));
 
-import { searchDocuments, runRAG } from "@/lib/services/rag-pipeline";
+import { searchDocuments, runRAG, extractTextFromMessages } from "@/lib/services/rag-pipeline";
 import { generateEmbedding } from "@/lib/services/embedding";
 import { queryPinecone } from "@/lib/services/vector-store";
 import type { UIMessage } from "ai";
@@ -18,6 +18,42 @@ const mockedQuery = vi.mocked(queryPinecone);
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe("extractTextFromMessages", () => {
+  it("returns text from the last message's text part", () => {
+    const messages = [
+      { id: "1", role: "user", parts: [{ type: "text", text: "What is dhamma?" }] },
+    ] as UIMessage[];
+    expect(extractTextFromMessages(messages)).toBe("What is dhamma?");
+  });
+
+  it("returns empty string for empty messages array", () => {
+    expect(extractTextFromMessages([])).toBe("");
+  });
+
+  it("returns empty string when last message has no text part", () => {
+    const messages = [
+      {
+        id: "1",
+        role: "assistant",
+        parts: [{ type: "data-reasoning", data: { summary: "thinking" } }],
+      },
+    ] as UIMessage[];
+    expect(extractTextFromMessages(messages)).toBe("");
+  });
+
+  it("returns empty string when parts array is missing and no content field", () => {
+    const messages = [{ id: "1", role: "user" }] as UIMessage[];
+    expect(extractTextFromMessages(messages)).toBe("");
+  });
+
+  it("falls back to legacy content field when parts is not an array", () => {
+    const messages = [
+      { id: "1", role: "user", content: "legacy text" },
+    ] as unknown as UIMessage[];
+    expect(extractTextFromMessages(messages)).toBe("legacy text");
+  });
 });
 
 describe("searchDocuments", () => {
@@ -69,13 +105,9 @@ describe("runRAG (back-compat wrapper)", () => {
     mockedEmbed.mockResolvedValue([0.1]);
     mockedQuery.mockResolvedValue([]);
 
-    const messages: UIMessage[] = [
-      {
-        id: "1",
-        role: "user",
-        parts: [{ type: "text", text: "What is dhamma?" }],
-      },
-    ];
+    const messages = [
+      { id: "1", role: "user", parts: [{ type: "text", text: "What is dhamma?" }] },
+    ] as UIMessage[];
 
     await runRAG(messages);
 
