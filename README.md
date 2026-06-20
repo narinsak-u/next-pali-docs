@@ -130,6 +130,8 @@ Streaming response to client
 - **`lib/services/suggestions.ts`** — Follow-up question generation via structured LLM output
 - **`lib/chat/pali-system-prompt.ts`** — Pali expert role definition
 
+> See [`docs/QUIZ-WORKFLOW.md`](./docs/QUIZ-WORKFLOW.md) for the quiz generation pipeline (topic selection → vector retrieval → LLM → timer → scoring).
+
 ## 🚀 Implementation Guide for Contributors
 
 ### 1. Getting Started with Accounts
@@ -224,7 +226,7 @@ await index.namespace("your-namespace").upsert([
 | Feature | Model (default) | Provider | Fallback |
 |---------|-----------------|----------|----------|
 | **RAG Chat** | `google/gemma-4-31b-it:free` | OpenRouter | Any OpenAI-compatible model via `LLM_MODEL` env var |
-| **Quiz Generation** | `gpt-4o-mini` | OpenAI (via OpenRouter) | — |
+| **Quiz Generation** | `google/gemma-4-31b-it:free` | OpenRouter | Configurable via `LLM_MODEL` |
 | **Follow-up Suggestions** | Same as `LLM_MODEL` | OpenRouter | — |
 
 Set `LLM_MODEL` in your `.env.local` to override the default for chat and suggestions.

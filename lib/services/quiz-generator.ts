@@ -1,5 +1,5 @@
 import { streamObject } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { openrouter } from "@/lib/services/openrouter-client";
 import { quizResponseSchema } from "@/lib/schemas/quiz";
 
 export interface QuizGenerationInput {
@@ -10,7 +10,7 @@ export interface QuizGenerationInput {
 
 export async function generateQuizResponse(input: QuizGenerationInput) {
   const result = streamObject({
-    model: openai("gpt-4o-mini"),
+    model: openrouter(process.env.LLM_MODEL ?? "google/gemma-4-31b-it:free"),
     schema: quizResponseSchema,
     prompt: `
     Using this context as reference: ${input.context}
