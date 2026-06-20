@@ -7,18 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Question, QuizQuestion } from "../components/QuizQuestont";
 import { getStats } from "@/helpers/get-stats";
 import { CheckCircle } from "lucide-react";
-import { QuizResponse } from "@/lib/schemas/quiz";
 
 type Props = {
   selectedTopic: string | null;
   currentPage: number;
   setCurrentPage: (page: number) => void;
   questions: Question[];
-  object?: QuizResponse;
   answers: Record<string, string>;
   quizCompleted: boolean;
   timeExpired: boolean;
-  isLoading: boolean;
   allQuestionsAnswered: boolean;
   answeredQuestionsCount: number;
   progressPercentage: number;
@@ -32,11 +29,9 @@ const QuizState = ({
   currentPage,
   setCurrentPage,
   questions,
-  object,
   answers,
   quizCompleted,
   timeExpired,
-  isLoading,
   allQuestionsAnswered,
   answeredQuestionsCount,
   progressPercentage,
@@ -68,40 +63,30 @@ const QuizState = ({
             </p>
           </div>
 
-          {!isLoading && (
-            <QuizTimer
-              duration={
-                (topic?.time ?? 0) * 60
-              }
-              onTimeUp={handleTimeUp}
-            />
-          )}
+          <QuizTimer
+            duration={
+              (topic?.time ?? 0) * 60
+            }
+            onTimeUp={handleTimeUp}
+          />
         </div>
 
-        {!isLoading && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">
-                {`ตอบแล้ว ${answeredQuestionsCount} จากทั้งหมด ${questions.length}`}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                {progressPercentage.toFixed(0)}% สมบูรณ์
-              </span>
-            </div>
-            <Progress value={progressPercentage} className="h-2" />
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">
+              {`ตอบแล้ว ${answeredQuestionsCount} จากทั้งหมด ${questions.length}`}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {progressPercentage.toFixed(0)}% สมบูรณ์
+            </span>
           </div>
-        )}
+          <Progress value={progressPercentage} className="h-2" />
+        </div>
 
         <Card>
           <CardContent className="p-6">
             <div className="space-y-8">
-              {isLoading && (
-                <div className="text-center">{`${
-                  object?.questions?.length || 0
-                } Questions rendering ...`}</div>
-              )}
-              {!isLoading &&
-                currentQuestions.map((question, index) => (
+              {currentQuestions.map((question, index) => (
                   <QuizQuestion
                     key={question.id}
                     questionNo={index + 1}
@@ -113,8 +98,7 @@ const QuizState = ({
             </div>
           </CardContent>
 
-          {!isLoading && (
-            <CardFooter className="flex flex-col gap-4 sm:flex-row sm:justify-between">
+          <CardFooter className="flex flex-col gap-4 sm:flex-row sm:justify-between">
               <QuizPagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -143,7 +127,6 @@ const QuizState = ({
                 </Button>
               </div>
             </CardFooter>
-          )}
         </Card>
       </div>
     </div>

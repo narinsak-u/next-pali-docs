@@ -29,8 +29,6 @@ export default function QuizContents() {
     answers,
     quizCompleted,
     timeExpired,
-    isLoading,
-    object,
     allQuestionsAnswered,
     answeredQuestionsCount,
     progressPercentage,
@@ -66,11 +64,9 @@ export default function QuizContents() {
           currentPage={currentPage}
           setCurrentPage={goToPage}
           questions={questions}
-          object={object}
           answers={answers}
           quizCompleted={quizCompleted}
           timeExpired={timeExpired}
-          isLoading={isLoading}
           handleTimeUp={timeUp}
           handleSelectOption={selectOption}
           handleSubmitQuiz={submitQuiz}
