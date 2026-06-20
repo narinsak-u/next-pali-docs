@@ -5,6 +5,8 @@ export { TaskStep } from "./task-step";
 export type { TaskStepProps } from "./task-step";
 export { ResponseStep } from "./response-step";
 export { SuggestionStep } from "./suggestion-step";
+export { ProcessBadge } from "./process-badge";
+export { ProcessDetails } from "./process-details";
 export { ChatInput } from "./chat-input";
 export { useAIChat } from "@/hooks/use-ai-chat";
 export type { StepDescriptor, StepKind, StepStatus } from "./step-descriptor";

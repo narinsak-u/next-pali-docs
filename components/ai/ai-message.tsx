@@ -1,12 +1,11 @@
 "use client";
 
 import type { UIMessage } from "ai";
-import { TimelineRail } from "./timeline-rail";
 import type { StepDescriptor } from "./step-descriptor";
-import { ReasoningStep } from "./reasoning-step";
-import { TaskStep } from "./task-step";
 import { ResponseStep } from "./response-step";
 import { SuggestionStep } from "./suggestion-step";
+import { ProcessBadge } from "./process-badge";
+import { ProcessDetails } from "./process-details";
 import {
   type ReasoningPart,
   type TaskPart,
@@ -39,97 +38,81 @@ export function AIMessage({
     .map((p) => p.text)
     .join("");
 
-  const steps: StepDescriptor[] = [];
-  let stepCounter = 0;
-  const nextId = () => `step-${++stepCounter}`;
-
+  const reasoningParts: Array<{ type: "data-reasoning"; data: ReasoningPart }> = [];
+  const taskPartsLatest: Array<{ type: "data-task"; data: TaskPart }> = [];
+  const suggestionParts: Array<{ type: "data-suggestions"; data: SuggestionsPart }> = [];
   const seenTaskIds = new Set<string>();
 
   for (const p of parts) {
     if (p.type === "data-reasoning") {
-      steps.push({ id: nextId(), kind: "reasoning", status: "done", label: "Reasoning" });
+      reasoningParts.push(p as { type: "data-reasoning"; data: ReasoningPart });
     } else if (p.type === "data-task") {
       const data = (p as { type: "data-task"; data: TaskPart }).data;
       if (data.id) {
         if (seenTaskIds.has(data.id)) {
-          const existing = steps.find(
-            (s) => s.kind === "task" && s.id === `task-${data.id}`,
-          );
+          const existing = taskPartsLatest.find((t) => t.data.id === data.id);
           if (existing) {
-            existing.status = data.status;
+            existing.data = { ...existing.data, status: data.status };
           }
-          continue;
+        } else {
+          seenTaskIds.add(data.id);
+          taskPartsLatest.push(p as { type: "data-task"; data: TaskPart });
         }
-        seenTaskIds.add(data.id);
-        steps.push({
-          id: `task-${data.id}`,
-          kind: "task",
-          status: data.status,
-          label: data.label,
-        });
       } else {
-        steps.push({
-          id: nextId(),
-          kind: "task",
-          status: data.status,
-          label: data.label,
-        });
+        taskPartsLatest.push(p as { type: "data-task"; data: TaskPart });
       }
     } else if (p.type === "data-suggestions") {
-      steps.push({ id: nextId(), kind: "suggestions", status: "done", label: "Suggestions" });
+      suggestionParts.push(p as { type: "data-suggestions"; data: SuggestionsPart });
     }
   }
 
-  if (text) {
-    const firstSuggestionIdx = steps.findIndex((s) => s.kind === "suggestions");
-    const insertAt = firstSuggestionIdx === -1 ? steps.length : firstSuggestionIdx;
-    steps.splice(insertAt, 0, {
-      id: nextId(),
-      kind: "response",
-      status: "done",
-      label: "Response",
-    });
-  }
+  const processSteps: StepDescriptor[] = [
+    ...reasoningParts.map((_, i) => ({
+      id: `reasoning-${i}`,
+      kind: "reasoning" as const,
+      status: "done" as const,
+      label: "Reasoning",
+    })),
+    ...taskPartsLatest.map((t) => ({
+      id: t.data.id ? `task-${t.data.id}` : `task-${t.data.label}`,
+      kind: "task" as const,
+      status: t.data.status,
+      label: t.data.label,
+    })),
+  ];
 
-  const reasoningParts = parts.filter((p) => p.type === "data-reasoning") as Array<{
-    type: "data-reasoning";
-    data: ReasoningPart;
-  }>;
-  const taskParts = parts.filter((p) => p.type === "data-task") as Array<{
-    type: "data-task";
-    data: TaskPart;
-  }>;
-  const suggestionParts = parts.filter((p) => p.type === "data-suggestions") as Array<{
-    type: "data-suggestions";
-    data: SuggestionsPart;
-  }>;
+  const totalMatches = taskPartsLatest.reduce(
+    (sum, t) => sum + (t.data.matchCount ?? 0),
+    0,
+  );
+  const hasProcess = processSteps.length > 0;
+  const badgeLabel = hasProcess
+    ? totalMatches > 0
+      ? `ใช้เอกสาร ${totalMatches} รายการ`
+      : "ขั้นตอนการคิด"
+    : null;
 
   return (
-    <div className="flex gap-3 w-full justify-start" data-testid="ai-message">
-      <TimelineRail steps={steps} />
-      <div className="flex flex-col gap-2 max-w-[85%] lg:max-w-[75%]">
-        {reasoningParts.map((p, i) => (
-          <ReasoningStep key={`r-${i}`} summary={p.data.summary} />
-        ))}
-        {taskParts.map((p, i) => (
-          <TaskStep
-            key={`t-${i}`}
-            label={p.data.label}
-            status={p.data.status}
-            query={p.data.query}
-            matchCount={p.data.matchCount}
-            message={p.data.message}
+    <div className="flex flex-col gap-2 w-full" data-testid="ai-message">
+      {text && <ResponseStep text={text} isStreaming={false} />}
+
+      {badgeLabel && (
+        <ProcessBadge label={badgeLabel}>
+          <ProcessDetails
+            steps={processSteps}
+            reasoning={reasoningParts.map((p) => p.data)}
+            tasks={taskPartsLatest.map((t) => t.data)}
           />
-        ))}
-        {text && <ResponseStep text={text} isStreaming={false} />}
-        {suggestionParts.map((p, i) => (
-          <SuggestionStep
-            key={`s-${i}`}
-            suggestions={p.data.suggestions}
-            onSelect={onSelectSuggestion}
-          />
-        ))}
-      </div>
+        </ProcessBadge>
+      )}
+
+      {suggestionParts.map((p, i) => (
+        <SuggestionStep
+          key={`s-${i}`}
+          suggestions={p.data.suggestions}
+          onSelect={onSelectSuggestion}
+        />
+      ))}
     </div>
   );
 }
