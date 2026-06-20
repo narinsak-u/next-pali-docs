@@ -1,43 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 
 interface LoadingOverlayProps {
-  duration?: number;
-  onComplete: () => void;
   error?: string | null;
   onRetry?: () => void;
 }
 
 export function LoadingOverlay({
-  duration = 15,
-  onComplete,
   error,
   onRetry,
 }: LoadingOverlayProps) {
-  const [progress, setProgress] = useState(0);
-
-  useEffect(() => {
-    if (error) return;
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        const newProgress = prev + 100 / (duration * 10);
-        return Math.min(newProgress, 100);
-      });
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [duration, error]);
-
-  useEffect(() => {
-    if (progress >= 100 && !error) {
-      onComplete();
-    }
-  }, [progress, onComplete, error]);
-
   if (error) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
@@ -63,8 +37,7 @@ export function LoadingOverlay({
         <p className="text-muted-foreground">
           เตรียมพร้อมสำหรับคำถามที่คัดสรรมาอย่างดี และความท้าทายที่รอคุณอยู่...
         </p>
-        <Progress value={progress} className="h-2 w-full" />
-        <p className="text-sm text-muted-foreground">{Math.round(progress)}%</p>
+        <Loader2 className="size-8 mx-auto animate-spin text-primary" />
       </div>
     </div>
   );

@@ -55,7 +55,7 @@ export default function QuizContents() {
   }
 
   if (appState === "loading") {
-    return <LoadingOverlay onComplete={() => {}} error={getErrorMessage(error)} onRetry={handleRetry} />;
+    return <LoadingOverlay error={getErrorMessage(error)} onRetry={handleRetry} />;
   }
 
   if (appState === "quiz") {
