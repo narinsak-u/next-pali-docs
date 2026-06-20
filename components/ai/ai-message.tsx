@@ -43,18 +43,52 @@ export function AIMessage({
   let stepCounter = 0;
   const nextId = () => `step-${++stepCounter}`;
 
+  const seenTaskIds = new Set<string>();
+
   for (const p of parts) {
     if (p.type === "data-reasoning") {
       steps.push({ id: nextId(), kind: "reasoning", status: "done", label: "Reasoning" });
     } else if (p.type === "data-task") {
       const data = (p as { type: "data-task"; data: TaskPart }).data;
-      steps.push({ id: nextId(), kind: "task", status: data.status, label: data.label });
+      if (data.id) {
+        if (seenTaskIds.has(data.id)) {
+          const existing = steps.find(
+            (s) => s.kind === "task" && s.id === `task-${data.id}`,
+          );
+          if (existing) {
+            existing.status = data.status;
+          }
+          continue;
+        }
+        seenTaskIds.add(data.id);
+        steps.push({
+          id: `task-${data.id}`,
+          kind: "task",
+          status: data.status,
+          label: data.label,
+        });
+      } else {
+        steps.push({
+          id: nextId(),
+          kind: "task",
+          status: data.status,
+          label: data.label,
+        });
+      }
     } else if (p.type === "data-suggestions") {
       steps.push({ id: nextId(), kind: "suggestions", status: "done", label: "Suggestions" });
     }
   }
+
   if (text) {
-    steps.push({ id: nextId(), kind: "response", status: "done", label: "Response" });
+    const firstSuggestionIdx = steps.findIndex((s) => s.kind === "suggestions");
+    const insertAt = firstSuggestionIdx === -1 ? steps.length : firstSuggestionIdx;
+    steps.splice(insertAt, 0, {
+      id: nextId(),
+      kind: "response",
+      status: "done",
+      label: "Response",
+    });
   }
 
   const reasoningParts = parts.filter((p) => p.type === "data-reasoning") as Array<{

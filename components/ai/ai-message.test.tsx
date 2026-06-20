@@ -21,6 +21,22 @@ describe("AIMessage", () => {
     expect(screen.getAllByTestId("timeline-node")).toHaveLength(4);
   });
 
+  it("collapses repeated data-task parts with the same id to a single rail node", () => {
+    const msg = buildMessage([
+      { type: "data-reasoning", data: { summary: "พบ 3 รายการ" } },
+      { type: "data-task", data: { id: "t1", label: "ค้นหาเอกสาร", status: "running", query: "dhamma" } },
+      { type: "data-task", data: { id: "t1", label: "ค้นหาเอกสาร", status: "done", matchCount: 3 } },
+      { type: "text", text: "Dhamma is..." },
+      { type: "data-suggestions", data: { suggestions: ["q1", "q2", "q3"] } },
+    ]);
+
+    render(<AIMessage message={msg} onSelectSuggestion={() => {}} />);
+
+    const nodes = screen.getAllByTestId("timeline-node");
+    expect(nodes).toHaveLength(4);
+    expect(nodes.map((n) => n.textContent)).toEqual(["?", "⚙", "A", "→"]);
+  });
+
   it("renders each step component for its part type", () => {
     const msg = buildMessage([
       { type: "data-reasoning", data: { summary: "summary text" } },

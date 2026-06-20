@@ -7,6 +7,7 @@ export const reasoningPartSchema = z.object({
 });
 
 export const taskPartSchema = z.object({
+  id: z.string().optional(),
   label: z.string().min(1),
   status: taskStatusSchema,
   query: z.string().optional(),

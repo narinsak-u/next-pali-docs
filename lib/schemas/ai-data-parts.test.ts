@@ -37,6 +37,22 @@ describe("ai-data-parts", () => {
     ).toEqual({ label: "ค้นหาเอกสาร", status: "done", matchCount: 3 });
   });
 
+  it("accepts a task part with id", () => {
+    expect(
+      taskPartSchema.parse({
+        id: "tc-1",
+        label: "ค้นหาเอกสาร",
+        status: "done",
+        matchCount: 3,
+      }),
+    ).toEqual({
+      id: "tc-1",
+      label: "ค้นหาเอกสาร",
+      status: "done",
+      matchCount: 3,
+    });
+  });
+
   it("accepts an error task part with message", () => {
     expect(
       taskPartSchema.parse({
