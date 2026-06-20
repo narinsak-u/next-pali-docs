@@ -2,6 +2,7 @@ import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
+  stepCountIs,
   streamText,
   tool,
   type UIMessage,
@@ -10,11 +11,7 @@ import { z } from "zod";
 import { searchDocuments } from "@/lib/services/rag-pipeline";
 import { openrouter } from "@/lib/services/openrouter-client";
 import { PALI_EXPERT_SYSTEM_PROMPT } from "@/lib/chat/pali-system-prompt";
-import { generateSuggestions } from "@/lib/services/suggestions";
-import {
-  formatContext,
-  type DocumentMatch,
-} from "@/lib/services/vector-store";
+import { formatContext, type DocumentMatch } from "@/lib/services/vector-store";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -25,21 +22,20 @@ function buildSystemWithContext(baseSystem: string, context: string): string {
 
 export async function POST(req: Request) {
   try {
-    // Parse messages from request body
     const { messages }: { messages: UIMessage[] } = await req.json();
 
-    let lastMatchCount = 0;
-    let lastAnswer = "";
-
-    // Create streaming response with tool execution and context injection
     const stream = createUIMessageStream({
       originalMessages: messages,
       execute: async ({ writer }) => {
-        // Run LLM with RAG tool for searching Pali textbook corpus
+        let suggestionsGenerated = false;
+
         const result = streamText({
-          model: openrouter(process.env.LLM_MODEL ?? "google/gemma-4-31b-it:free"),
+          model: openrouter(
+            process.env.LLM_MODEL ?? "google/gemma-4-31b-it:free",
+          ),
           system: PALI_EXPERT_SYSTEM_PROMPT,
           messages: convertToModelMessages(messages),
+          stopWhen: stepCountIs(2),
           tools: {
             searchDocs: tool({
               description:
@@ -53,7 +49,6 @@ export async function POST(req: Request) {
                 });
                 try {
                   const { matches } = await searchDocuments(query);
-                  lastMatchCount = matches.length;
                   writer.write({
                     type: "data-task",
                     id: toolCallId,
@@ -63,10 +58,14 @@ export async function POST(req: Request) {
                       matchCount: matches.length,
                     },
                   });
+                  const excerpts = matches.map((m) =>
+                    m.text.slice(0, 120).trim(),
+                  );
                   writer.write({
                     type: "data-reasoning",
                     data: {
                       summary: `พบเอกสารที่เกี่ยวข้อง ${matches.length} รายการ`,
+                      excerpts,
                     },
                   });
                   return { matches };
@@ -78,13 +77,28 @@ export async function POST(req: Request) {
                     id: toolCallId,
                     data: { label: "ค้นหาเอกสาร", status: "error", message },
                   });
-                  lastMatchCount = 0;
                   return { matches: [] };
                 }
               },
             }),
+            suggestQuestions: tool({
+              description:
+                "Generate 3 follow-up questions for the user based on the conversation.",
+              inputSchema: z.object({
+                suggestions: z.array(z.string().min(1)).min(1).max(3),
+              }),
+              execute: async ({ suggestions }) => {
+                if (suggestionsGenerated) return { ok: false };
+                suggestionsGenerated = true;
+                if (suggestions.length === 0) return { ok: false };
+                writer.write({
+                  type: "data-suggestions",
+                  data: { suggestions },
+                });
+                return { ok: true };
+              },
+            }),
           },
-          // Inject retrieved context into system prompt for next LLM step
           prepareStep: async ({ steps }) => {
             for (const step of steps) {
               for (const tr of step.toolResults) {
@@ -94,9 +108,8 @@ export async function POST(req: Request) {
                   typeof tr.output === "object" &&
                   "matches" in tr.output
                 ) {
-                  const matches = (
-                    tr.output as { matches: DocumentMatch[] }
-                  ).matches;
+                  const matches = (tr.output as { matches: DocumentMatch[] })
+                    .matches;
                   if (matches.length > 0) {
                     const context = formatContext(matches);
                     return {
@@ -115,18 +128,6 @@ export async function POST(req: Request) {
 
         writer.merge(result.toUIMessageStream({ sendReasoning: false }));
         await result.consumeStream();
-
-        lastAnswer = await result.text;
-
-        // Generate follow-up suggestions from the final answer
-        if (lastMatchCount > 0 && lastAnswer) {
-          try {
-            const suggestions = await generateSuggestions(lastAnswer);
-            writer.write({ type: "data-suggestions", data: { suggestions } });
-          } catch {
-            // silent skip
-          }
-        }
       },
     });
 
