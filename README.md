@@ -57,7 +57,7 @@ In the project, you can see:
 | `app/docs`                | The documentation layout and pages.                    |
 | `app/api/question/route.ts` | The RAG chat API (LLM + vector search)        |
 | `app/api/search/route.ts` | The Route Handler for search.                          |
-| `app/api/quiz/route.ts`   | The quiz generation API.                               |
+| `app/api/quiz/route.ts`   | The quiz generation API (SSE streaming).               |
 
 ### Fumadocs MDX
 
@@ -93,9 +93,11 @@ Read the [Introduction](https://fumadocs.dev/docs/mdx) for further details.
     └── blog/              # MDX blog content
 ```
 
-## 🤖 RAG Chat Workflow
+## 🤖 AI Features
 
-The AI chat at `POST /api/question` uses a **Retrieval-Augmented Generation (RAG)** pipeline to answer Pali language questions with relevant textbook context.
+### RAG Chat (`POST /api/question`)
+
+Uses a **Retrieval-Augmented Generation (RAG)** pipeline with tool-based architecture:
 
 ```
 User Message
@@ -105,7 +107,7 @@ LLM decides to search ──► searchDocs tool
     │                           │
     │                     generateEmbedding(query)
     │                           │
-    │                     queryPinecone(vector, topK=5)
+    │                     queryPinecone(vector)
     │                           │
     │                     formatContext(matches)
     │                           │
@@ -114,23 +116,60 @@ prepareStep injects context into system prompt
     │
     ▼
 LLM continues with retrieved context
-    │
-    ▼
-generateSuggestions (3 follow-up questions)
-    │
-    ▼
-Streaming response to client
+    │         │
+    │    suggestQuestions tool
+    │         │
+    ▼         ▼
+Streaming response to client (answer + suggestions)
 ```
 
 **Key components:**
 - **`app/api/question/route.ts`** — Route handler orchestrating the stream
+- **`lib/services/llm-provider.ts`** — Provider factory (OpenRouter + OpenCode switching via `PROVIDER_NAME`)
 - **`lib/services/rag-pipeline.ts`** — `searchDocuments()` (embed → query → format)
 - **`lib/services/vector-store.ts`** — Pinecone query & context formatting
 - **`lib/services/embedding.ts`** — Text embedding via Pinecone inference (LRU-cached)
-- **`lib/services/suggestions.ts`** — Follow-up question generation via structured LLM output
 - **`lib/chat/pali-system-prompt.ts`** — Pali expert role definition
 
-> See [`docs/QUIZ-WORKFLOW.md`](./docs/QUIZ-WORKFLOW.md) for the quiz generation pipeline (topic selection → vector retrieval → LLM → timer → scoring).
+**Features:**
+- Search deduplication guard — Pinecone called only once per question
+- Up to 5 tool-calling steps for DeepSeek compatibility
+- Task ID nesting in `data.id` for client-side dedup
+
+### AI Quiz (`POST /api/quiz`)
+
+Generates multiple-choice Pali grammar questions with **real-time streaming**:
+
+```
+User selects topic
+    │
+    ▼
+generateEmbedding → queryPinecone → search-done (SSE)
+    │
+    ▼
+streamText + submitQuestions tool
+    │
+    ├── question (SSE) — question 1
+    ├── question (SSE) — question 2
+    ├── ...
+    └── done (SSE)
+    │
+    ▼
+Questions appear one-by-one in the UI as they're generated
+```
+
+**Key components:**
+- **`app/api/quiz/route.ts`** — SSE streaming endpoint
+- **`lib/services/quiz-pipeline.ts`** — Search + `streamText` + `submitQuestions` tool
+- **`lib/hooks/use-quiz-ai.ts`** — SSE stream reader with phase tracking
+- **`hooks/use-quiz.ts`** — Orchestrator for progressive question loading
+
+**Features:**
+- Questions stream to UI immediately — no waiting for full generation
+- Phased loading UI: searching → generating → quiz (with banner)
+- Up to 15 tool-calling steps for large quiz batches
+
+> See [`docs/RAG-WORKFLOW.md`](./docs/RAG-WORKFLOW.md) and [`docs/QUIZ-WORKFLOW.md`](./docs/QUIZ-WORKFLOW.md) for full architecture details.
 
 ## 🚀 Implementation Guide for Contributors
 
@@ -141,7 +180,7 @@ Before contributing to the AI/RAG features, you'll need accounts for these servi
 | Service | Purpose | How to Get |
 |---------|---------|------------|
 | **Pinecone** | Vector database for RAG document retrieval | Sign up at [pinecone.io](https://www.pinecone.io) → Create an index (dimension: `1024`, metric: `cosine`) → Copy API key & index name |
-| **OpenRouter** | LLM API gateway (one key for many models) | Sign up at [openrouter.ai](https://openrouter.ai) → Create API key → Add $5+ credit |
+| **OpenRouter or OpenCode** | LLM API provider | Sign up at [openrouter.ai](https://openrouter.ai) or [opencode.ai](https://opencode.ai) → Create API key → Add credit |
 | **Algolia** | Full-text search for documentation pages | Sign up at [algolia.com](https://www.algolia.com) → Create an app → Get search & admin API keys |
 
 ### 2. Dataset & Vector Database Setup
@@ -221,33 +260,42 @@ await index.namespace("your-namespace").upsert([
 
 > **Note:** There is currently no built-in Pinecone upsert script in this repo. Contributors should create one following the pattern above, using the same embedding model (`llama-text-embed-v2`) to ensure query embeddings are compatible.
 
-### 4. LLM Models Used
+### 4. LLM Models & Providers
 
-| Feature | Model (default) | Provider | Fallback |
-|---------|-----------------|----------|----------|
-| **RAG Chat** | `google/gemma-4-31b-it:free` | OpenRouter | Any OpenAI-compatible model via `LLM_MODEL` env var |
-| **Quiz Generation** | `google/gemma-4-31b-it:free` | OpenRouter | Configurable via `LLM_MODEL` |
-| **Follow-up Suggestions** | Same as `LLM_MODEL` | OpenRouter | — |
+Set `PROVIDER_NAME` to choose your LLM backend (`openrouter` or `opencode`, default: `openrouter`).
 
-Set `LLM_MODEL` in your `.env.local` to override the default for chat and suggestions.
+| Feature | Default Model | Provider |
+|---------|--------------|----------|
+| **RAG Chat** | Configurable per provider | OpenRouter or OpenCode |
+| **Quiz Generation** | Configurable per provider | OpenRouter or OpenCode |
+
+| Provider | Env Vars for Model | Default |
+|----------|-------------------|---------|
+| OpenRouter | `OPENROUTER_LLM_MODEL` or `LLM_MODEL` | `google/gemma-4-31b-it:free` |
+| OpenCode | `OPENCODE_LLM_MODEL` | `deepseek-v4-flash` |
+
+Both providers use `createOpenAICompatible` from `@ai-sdk/openai-compatible` (see `lib/services/llm-provider.ts`).
 
 ### 5. Environment Setup
 
 Copy `.env.example` (or create `.env.local`) with:
 
 ```env
+# LLM Provider (choose one)
+PROVIDER_NAME=openrouter   # or "opencode" for OpenCode's DeepSeek models
+
+# Option A: OpenRouter
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_LLM_MODEL=google/gemma-4-31b-it:free
+
+# Option B: OpenCode
+OPENCODE_API_KEY=sk-...
+OPENCODE_LLM_MODEL=deepseek-v4-flash
+
 # Pinecone (vector database)
 PINECONE_API_KEY=pcsk_...
 PINECONE_INDEX_NAME=pali-docs
 PINECONE_NAMESPACE=textbooks
-
-# OpenRouter (LLM gateway — also used as PROVIDER_API_KEY)
-OPENAI_API_KEY=sk-or-v1-...
-# or set explicitly:
-PROVIDER_API_KEY=sk-or-v1-...
-
-# Optional: override the default LLM model
-LLM_MODEL=google/gemma-4-31b-it:free
 
 # Algolia (full-text search)
 NEXT_PUBLIC_ALGOLIA_APP_ID=...

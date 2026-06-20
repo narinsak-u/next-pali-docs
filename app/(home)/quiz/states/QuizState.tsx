@@ -5,8 +5,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { QuizPagination } from "../components/QuizPagination";
 import { Button } from "@/components/ui/button";
 import { Question, QuizQuestion } from "../components/QuizQuestont";
-import { getStats } from "@/helpers/get-stats";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Loader2 } from "lucide-react";
 
 type Props = {
   selectedTopic: string | null;
@@ -22,6 +21,7 @@ type Props = {
   handleTimeUp: () => void;
   handleSelectOption: (questionId: string, optionId: string) => void;
   handleSubmitQuiz: () => void;
+  isGenerating?: boolean;
 };
 
 const QuizState = ({
@@ -38,6 +38,7 @@ const QuizState = ({
   handleTimeUp,
   handleSelectOption,
   handleSubmitQuiz,
+  isGenerating = false,
 }: Props) => {
   // Pagination setup
   const questionsPerPage = 5;
@@ -82,6 +83,13 @@ const QuizState = ({
           </div>
           <Progress value={progressPercentage} className="h-2" />
         </div>
+
+        {isGenerating && (
+          <div className="flex items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin text-primary" />
+            <span>กำลังสร้างคำถามเพิ่มเติม...</span>
+          </div>
+        )}
 
         <Card>
           <CardContent className="p-6">

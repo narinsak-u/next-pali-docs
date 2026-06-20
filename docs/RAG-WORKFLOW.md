@@ -2,7 +2,7 @@
 
 ## Overview
 
-The chat endpoint (`POST /api/question`) implements a Retrieval-Augmented Generation (RAG) pipeline for Pali language questions. The LLM uses a `searchDocs` tool to fetch relevant textbook passages from Pinecone, then continues generation with the retrieved context injected into the system prompt.
+The chat endpoint (`POST /api/question`) implements a Retrieval-Augmented Generation (RAG) pipeline for Pali language questions. The LLM uses a `searchDocs` tool to fetch relevant textbook passages from Pinecone, then continues generation with the retrieved context injected into the system prompt. Follow-up question suggestions are generated after the answer is complete.
 
 ## Architecture
 
@@ -21,15 +21,27 @@ Client ──POST /api/question──→ Route Handler
                               │          │
                               │    prepareStep()
                               │     └─ inject context into system prompt
+                              │          │
+                              │    suggestQuestions tool
+                              │     └─ follow-up questions to client
                               │
                           consumeStream()
-                              │
-                    generateSuggestions()
                                    │
                     createUIMessageStreamResponse
                                    │
 Client ←── streaming response ────┘
 ```
+
+## LLM Provider Switching
+
+The chat uses `llm(getDefaultModel())` from `lib/services/llm-provider.ts`, which dynamically selects between providers based on the `PROVIDER_NAME` environment variable:
+
+| Provider | `PROVIDER_NAME` | Base URL | Key Env Vars | Default Model |
+|----------|-----------------|----------|--------------|---------------|
+| OpenRouter | `openrouter` (default) | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY`, `OPENROUTER_LLM_MODEL` | `google/gemma-4-31b-it:free` |
+| OpenCode | `opencode` | `https://opencode.ai/zen/go/v1` | `OPENCODE_API_KEY`, `OPENCODE_LLM_MODEL` | `deepseek-v4-flash` |
+
+Both providers use `createOpenAICompatible` from `@ai-sdk/openai-compatible` under the hood. The `llm()` function creates a configured model instance, and `getDefaultModel()` returns the model name from the appropriate env var.
 
 ## Step-by-Step Flow
 
@@ -48,10 +60,11 @@ Client ←── streaming response ────┘
 
 | Parameter | Source | Description |
 |-----------|--------|-------------|
-| `model` | `openrouter(LLM_MODEL)` | Default: `google/gemma-4-31b-it:free` |
+| `model` | `llm(getDefaultModel())` | Provider-selected model |
 | `system` | `PALI_EXPERT_SYSTEM_PROMPT` | Static prompt defining the Pali expert role |
 | `messages` | `convertToModelMessages(messages)` | Converts UI messages to model format |
-| `tools` | `searchDocs` | Registered tool for RAG retrieval |
+| `stopWhen` | `stepCountIs(5)` | Allows up to 5 tool-calling steps (increased from 2 for DeepSeek compatibility) |
+| `tools` | `searchDocs`, `suggestQuestions` | Registered tools for RAG and suggestions |
 
 The system prompt (`lib/chat/pali-system-prompt.ts`) instructs the model:
 - Act as a Pali language expert
@@ -62,23 +75,39 @@ The system prompt (`lib/chat/pali-system-prompt.ts`) instructs the model:
 
 When the LLM decides to search, the `execute` handler runs:
 
-**a. Status updates** — Writer sends `data-task` events to the client:
+**a. Search deduplication guard:**
+```ts
+if (searchCompleted && cachedResult) {
+  // Return cached results immediately — no duplicate Pinecone calls
+  writer.write({
+    type: "data-task",
+    data: { id: toolCallId, label: "ค้นหาเอกสาร", status: "done", ... },
+  });
+  return cachedResult;
+}
+searchCompleted = true;
+```
+This prevents redundant searches when models (e.g. DeepSeek) call the tool multiple times in the same conversation turn.
+
+**b. Status updates** — Writer sends `data-task` events to the client:
 - `running` → UI shows loading state with the query
 - `done` → UI shows match count
 - `error` → UI shows error message, empty results returned
 
-**b. Embedding generation** (`lib/services/embedding.ts`):
+**c. Embedding generation** (`lib/services/embedding.ts`):
 - The search query is embedded using Pinecone's inference API with model `llama-text-embed-v2`
 - A simple LRU cache (100 entries) avoids redundant embedding calls
 
-**c. Vector search** (`lib/services/vector-store.ts`):
+**d. Vector search** (`lib/services/vector-store.ts`):
 - The embedding vector is queried against the Pinecone index (`PINECONE_INDEX_NAME`) in namespace `PINECONE_NAMESPACE`
 - Returns top 5 matches (`topK`) with `includeMetadata: true`
 - Results are filtered to only include documents with non-empty `text` metadata
 
-**d. Formatting** — `formatContext()` concatenates matched document texts with `\n---\n` separators
+**e. Formatting** — `formatContext()` concatenates matched document texts with `\n---\n` separators
 
-**e. Reasoning update** — Writer sends `data-reasoning` with a Thai summary: "พบเอกสารที่เกี่ยวข้อง N รายการ"
+**f. Reasoning update** — Writer sends `data-reasoning` with a Thai summary: "พบเอกสารที่เกี่ยวข้อง N รายการ" and text excerpts
+
+**g. Task ID nesting** — `toolCallId` is placed inside `data.id` (not at the top `id` level) to match client-side dedup logic in `ai-message.tsx`
 
 ### 5. Context Injection — `prepareStep`
 
@@ -97,20 +126,32 @@ After each tool execution step, `prepareStep` checks for `searchDocs` results:
 
 This is the core RAG mechanism: the LLM first decides what to search for (tool call), then continues generation with the retrieved context available.
 
-### 6. Stream Consumption
+### 6. Tool Execution — `suggestQuestions`
 
-- `result.toUIMessageStream()` merges the LLM's text + tool call stream into the UI stream
+After the answer is complete, the LLM may call `suggestQuestions`:
+
+```ts
+suggestQuestions: tool({
+  inputSchema: z.object({
+    suggestions: z.array(z.string().min(1)).min(1).max(3),
+  }),
+  execute: async ({ suggestions }) => {
+    if (suggestionsGenerated) return { ok: false }; // dedup guard
+    suggestionsGenerated = true;
+    if (suggestions.length === 0) return { ok: false };
+    writer.write({
+      type: "data-suggestions",
+      data: { suggestions },
+    });
+    return { ok: true };
+  },
+})
+```
+
+### 7. Stream Consumption
+
+- `writer.merge(result.toUIMessageStream({ sendReasoning: false }))` merges the LLM's text + tool call stream into the UI stream
 - `result.consumeStream()` waits for full completion
-- `result.text` captures the final answer text
-
-### 7. Follow-up Suggestions
-
-If documents were found (`lastMatchCount > 0`) and an answer was generated:
-
-- `generateSuggestions(lastAnswer)` calls a separate LLM with structured output (Zod schema `suggestions: z.array(z.string().min(1)).length(3)`)
-- The suggestion model receives: "Generate exactly 3 follow-up questions in the same language as the user's last message. Keep them short, focused, and grounded in the previous answer."
-- Results are sent as a `data-suggestions` event to the client
-- Failures are silently skipped
 
 ### 8. Response
 
@@ -130,20 +171,19 @@ Non-LLM exceptions (network, Pinecone failures) are caught at the route level.
 | File | Role |
 |------|------|
 | `app/api/question/route.ts` | Route handler, stream orchestration |
-| `lib/services/rag-pipeline.ts` | `searchDocuments()`, `runRAG()` |
+| `lib/services/llm-provider.ts` | LLM provider factory (OpenRouter + OpenCode switching) |
+| `lib/services/rag-pipeline.ts` | `searchDocuments()` |
 | `lib/services/vector-store.ts` | Pinecone query, context formatting |
 | `lib/services/embedding.ts` | Embedding generation with LRU cache |
-| `lib/services/openrouter-client.ts` | OpenRouter-compatible LLM client |
 | `lib/chat/pali-system-prompt.ts` | Pali expert role definition |
 | `lib/services/suggestions.ts` | Follow-up question generation |
-| `lib/pinecone.ts` | Pinecone client singleton |
 
 ## Streaming Events
 
 | Type | Purpose |
 |------|---------|
-| `data-task` | Tool status updates (running/done/error) |
-| `data-reasoning` | Search summary for the user |
+| `data-task` | Tool status updates (`id` inside `data` for client dedup) |
+| `data-reasoning` | Search summary and excerpts for the user |
 | `data-suggestions` | Follow-up question suggestions |
 | (text) | LLM-generated answer tokens |
 
@@ -151,8 +191,11 @@ Non-LLM exceptions (network, Pinecone failures) are caught at the route level.
 
 | Variable | Required | Used By |
 |----------|----------|---------|
-| `OPENAI_API_KEY` (as `PROVIDER_API_KEY`) | Yes | OpenRouter LLM calls |
-| `LLM_MODEL` | No (has default) | Model selection |
+| `PROVIDER_NAME` | No (default: `openrouter`) | Provider selection |
+| `OPENROUTER_API_KEY` / `OPENAI_API_KEY` | If OpenRouter | OpenRouter LLM calls |
+| `OPENROUTER_LLM_MODEL` / `LLM_MODEL` | No (has default) | Model selection |
+| `OPENCODE_API_KEY` | If OpenCode | OpenCode LLM calls |
+| `OPENCODE_LLM_MODEL` | No (has default) | Model selection |
 | `PINECONE_API_KEY` | Yes | Vector search |
 | `PINECONE_INDEX_NAME` | Yes | Vector search |
 | `PINECONE_NAMESPACE` | No | Vector namespace scoping |
