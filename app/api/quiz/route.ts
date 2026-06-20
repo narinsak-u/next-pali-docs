@@ -1,20 +1,18 @@
-import { quizAction } from "@/actions/quiz";
+import { generateQuiz, isQuotaError } from "@/lib/services/quiz-pipeline";
+import { quizSchema } from "@/lib/schemas/quiz";
 import { NextResponse } from "next/server";
+
+export const maxDuration = 30;
 
 export async function POST(req: Request) {
   try {
     const data = await req.json();
-    const result = await quizAction(data);
-
-    if ("error" in result) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
-    }
-
-    return result;
+    const parsed = quizSchema.parse(data);
+    return await generateQuiz({ topics: parsed.topics, amount: parsed.amount });
   } catch (error: unknown) {
     console.error("Quiz API error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    if (message.includes("quota") || message.includes("429")) {
+    if (isQuotaError(error) || message.includes("429")) {
       return NextResponse.json(
         { error: "บริการ AI หมดโควต้าการใช้งาน กรุณาลองใหม่อีกครั้งในภายหลัง" },
         { status: 429 }
