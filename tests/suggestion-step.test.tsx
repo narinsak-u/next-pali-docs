@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { SuggestionStep } from "./suggestion-step";
+import { SuggestionStep } from "@/components/ai/suggestion-step";
 
 describe("SuggestionStep", () => {
   it("renders one chip per suggestion", () => {

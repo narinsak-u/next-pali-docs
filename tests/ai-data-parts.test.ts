@@ -4,7 +4,7 @@ import {
   taskPartSchema,
   suggestionsPartSchema,
   taskStatusSchema,
-} from "./ai-data-parts";
+} from "@/lib/schemas/ai-data-parts";
 
 describe("ai-data-parts", () => {
   it("accepts a valid reasoning part", () => {

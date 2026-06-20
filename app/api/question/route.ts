@@ -25,14 +25,17 @@ function buildSystemWithContext(baseSystem: string, context: string): string {
 
 export async function POST(req: Request) {
   try {
+    // Parse messages from request body
     const { messages }: { messages: UIMessage[] } = await req.json();
 
     let lastMatchCount = 0;
     let lastAnswer = "";
 
+    // Create streaming response with tool execution and context injection
     const stream = createUIMessageStream({
       originalMessages: messages,
       execute: async ({ writer }) => {
+        // Run LLM with RAG tool for searching Pali textbook corpus
         const result = streamText({
           model: openrouter(process.env.LLM_MODEL ?? "google/gemma-4-31b-it:free"),
           system: PALI_EXPERT_SYSTEM_PROMPT,
@@ -81,6 +84,7 @@ export async function POST(req: Request) {
               },
             }),
           },
+          // Inject retrieved context into system prompt for next LLM step
           prepareStep: async ({ steps }) => {
             for (const step of steps) {
               for (const tr of step.toolResults) {
@@ -114,6 +118,7 @@ export async function POST(req: Request) {
 
         lastAnswer = await result.text;
 
+        // Generate follow-up suggestions from the final answer
         if (lastMatchCount > 0 && lastAnswer) {
           try {
             const suggestions = await generateSuggestions(lastAnswer);

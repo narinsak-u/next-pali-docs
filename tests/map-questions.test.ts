@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mapQuestionsFromResponse } from '../map-questions'
+import { mapQuestionsFromResponse } from '@/helpers/map-questions'
 
 describe('mapQuestionsFromResponse', () => {
   it('maps response questions to QuizQuestion format', () => {

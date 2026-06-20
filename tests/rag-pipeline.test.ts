@@ -1,16 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./embedding", () => ({
+vi.mock("@/lib/services/embedding", () => ({
   generateEmbedding: vi.fn(),
 }));
-vi.mock("./vector-store", () => ({
+vi.mock("@/lib/services/vector-store", () => ({
   queryPinecone: vi.fn(),
   formatContext: vi.fn((m: unknown[]) => `ctx(${m.length})`),
 }));
 
-import { searchDocuments, runRAG } from "./rag-pipeline";
-import { generateEmbedding } from "./embedding";
-import { queryPinecone } from "./vector-store";
+import { searchDocuments, runRAG } from "@/lib/services/rag-pipeline";
+import { generateEmbedding } from "@/lib/services/embedding";
+import { queryPinecone } from "@/lib/services/vector-store";
 import type { UIMessage } from "ai";
 
 const mockedEmbed = vi.mocked(generateEmbedding);

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
-import { AIMessage } from "./ai-message";
+import { AIMessage } from "@/components/ai/ai-message";
 import type { UIMessage } from "ai";
 
 function buildMessage(parts: UIMessage["parts"], id = "m1"): UIMessage {

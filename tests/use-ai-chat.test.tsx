@@ -9,7 +9,7 @@ vi.mock("ai", () => ({
 }));
 
 import { useChat } from "@ai-sdk/react";
-import { useAIChat } from "./use-ai-chat";
+import { useAIChat } from "@/hooks/use-ai-chat";
 
 function setup(overrides: Partial<{
   messages: unknown[];

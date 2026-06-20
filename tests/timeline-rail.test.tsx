@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { TimelineRail } from "./timeline-rail";
-import type { StepDescriptor } from "./step-descriptor";
+import { TimelineRail } from "@/components/ai/timeline-rail";
+import type { StepDescriptor } from "@/components/ai/step-descriptor";
 
 const steps: StepDescriptor[] = [
   { id: "1", kind: "reasoning", status: "done", label: "Reasoning" },

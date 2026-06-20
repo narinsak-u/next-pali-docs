@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { generateSuggestions } from "./suggestions";
+import { generateSuggestions } from "@/lib/services/suggestions";
 import { generateText, Output } from "ai";
 
 vi.mock("ai", async (importOriginal) => {

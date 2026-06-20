@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PALI_EXPERT_SYSTEM_PROMPT } from "./pali-system-prompt";
+import { PALI_EXPERT_SYSTEM_PROMPT } from "@/lib/chat/pali-system-prompt";
 
 describe("pali-system-prompt", () => {
   it("declares the model a Pali language expert", () => {

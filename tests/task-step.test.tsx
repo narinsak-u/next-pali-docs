@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { TaskStep } from "./task-step";
+import { TaskStep } from "@/components/ai/task-step";
 
 describe("TaskStep", () => {
   it("shows the query when status is running", () => {

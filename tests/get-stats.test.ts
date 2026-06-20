@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getStats } from '../get-stats'
+import { getStats } from '@/helpers/get-stats'
 import type { Question } from '@/lib/schemas/quiz'
 
 describe('getStats', () => {

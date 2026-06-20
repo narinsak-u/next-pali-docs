@@ -15,7 +15,7 @@ Next.js 15 documentation site for Pali language learning (App Router, TypeScript
 | `npm run test:run` | Run all tests once |
 | `npm run index` | Run the search index update script |
 | `npm run postinstall` | Auto-runs fumadocs-mdx after npm install |
-**Single test:** `npx vitest run helpers/__tests__/get-stats.test.ts`
+**Single test:** `npx vitest run tests/get-stats.test.ts`
 
 **Type checking:** Run `next build` (no ESLint, Prettier, or standalone type-check script is configured).
 
@@ -23,7 +23,7 @@ Next.js 15 documentation site for Pali language learning (App Router, TypeScript
 
 - **Config:** `vitest.config.ts` — jsdom environment, globals enabled (no import needed for `describe`/`it`/`expect`), `@vitejs/plugin-react`, `@/` alias maps to project root
 - **Setup:** `vitest.setup.ts` imports `@testing-library/jest-dom/vitest`
-- **Location:** Tests in `__tests__/` directories adjacent to source files (e.g., `helpers/__tests__/get-stats.test.ts`)
+- **Location:** All tests in `tests/` directory (e.g., `tests/get-stats.test.ts`)
 - **Pattern:** `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`
 - Currently only helpers are tested. For component tests, use `@testing-library/react` (`render`, `screen`, `fireEvent`).
 
@@ -117,9 +117,10 @@ lib/                   # Utilities, services, hooks, schemas
   hooks/               # Domain-specific hooks (quiz sub-hooks)
   contexts/            # React contexts
 hooks/                 # Top-level app hooks (use-quiz orchestrator, use-ai-chat)
-helpers/               # Pure functions with tests
+helpers/               # Pure functions (tests in tests/)
 actions/               # Server actions
 data/                  # Static data files (nav, quiz topics, content tree)
+tests/                 # Test files (Vitest)
 providers/             # Root-level providers (theme, Fumadocs)
 ```
 

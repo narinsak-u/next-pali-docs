@@ -95,7 +95,7 @@ vi.mock("@/lib/services/vector-store", () => ({
   ),
 }));
 
-import { POST } from "./route";
+import { POST } from "@/app/api/question/route";
 import { searchDocuments } from "@/lib/services/rag-pipeline";
 import { generateSuggestions } from "@/lib/services/suggestions";
 import { formatContext } from "@/lib/services/vector-store";
