@@ -149,7 +149,7 @@ describe("AIMessage", () => {
       { type: "text", text: "world." },
     ]);
     render(<AIMessage message={msg} onSelectSuggestion={() => {}} />);
-    expect(screen.getByTestId("response-step").textContent).toBe("Hello world.");
+    expect(screen.getByTestId("response-step").textContent?.trim()).toBe("Hello world.");
   });
 
   it("forwards onSelectSuggestion to SuggestionStep", () => {

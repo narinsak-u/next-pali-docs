@@ -69,7 +69,9 @@ export function ChatInput(props: {
             value={props.value}
             onChange={(e) => props.onChange(e.target.value)}
             disabled={props.status !== "ready"}
-            placeholder={props.status === "streaming" ? "กำลังคิด..." : "ถามคำถาม..."}
+            placeholder={
+              props.status === "streaming" ? "กำลังหาคำตอบ..." : "ถามคำถาม..."
+            }
             className="pr-12 min-h-[52px] max-h-[200px]"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {

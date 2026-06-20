@@ -166,11 +166,12 @@ describe("POST /api/question", () => {
     )) as unknown as { body: { writer: WriterMock } };
 
     const stopWhen = aiMockInternals.getCapturedStopWhen() as
-      ((args: { steps: unknown[] }) => boolean) | null;
+      ((args: { steps: Array<{ text?: string }> }) => boolean) | null;
     expect(stopWhen).toBeDefined();
     expect(stopWhen!({ steps: [] })).toBe(false);
-    expect(stopWhen!({ steps: [1, 2] })).toBe(false);
-    expect(stopWhen!({ steps: [1, 2, 3, 4, 5] })).toBe(true);
+    expect(stopWhen!({ steps: [{ text: "" }, { text: "" }] })).toBe(false);
+    expect(stopWhen!({ steps: [{ text: "" }, { text: "" }, { text: "" }, { text: "" }, { text: "" }] })).toBe(true);
+    expect(stopWhen!({ steps: [{ text: "x".repeat(160) }] })).toBe(true);
 
     const writes = result.body.writer.writes;
     const taskRunning = writes.find(

@@ -29,16 +29,19 @@ export async function generateQuizStream(
       }
 
       try {
+        // Phase 1: Retrieve relevant textbook context from Pinecone
         const embeddingResult = await generateEmbedding(
           input.topics.join(", "),
         );
         const matches = await queryPinecone(embeddingResult, 10);
         const context = formatContext(matches);
 
+        // Tell the client search is done so it can transition from searching → generating
         send("search-done", { matchCount: matches.length });
 
         let totalSubmitted = 0;
 
+        // Phase 2: Stream quiz questions via LLM — each question emitted via SSE as it's generated
         const result = streamText({
           model: llm(getDefaultModel()),
           system:
@@ -82,6 +85,7 @@ export async function generateQuizStream(
                   .describe("Array of quiz questions to submit"),
               }),
               execute: async ({ questions }) => {
+                // Emit each question as an SSE event so the client renders it immediately
                 for (const q of questions) {
                   totalSubmitted++;
                   send("question", q);

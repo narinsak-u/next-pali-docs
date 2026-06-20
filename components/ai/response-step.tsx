@@ -1,15 +1,31 @@
+import { useMemo } from "react";
+import { marked } from "marked";
 import { cn } from "@/lib/utils";
 
-export function ResponseStep({ text, isStreaming }: { text: string; isStreaming: boolean }) {
+export function ResponseStep({
+  text,
+  isStreaming,
+}: {
+  text: string;
+  isStreaming: boolean;
+}) {
+  const html = useMemo(() => {
+    if (isStreaming || !text) return null;
+    return marked.parse(text, { async: false }) as string;
+  }, [text, isStreaming]);
+
   return (
     <div
       data-testid="response-step"
       className={cn(
-        "prose prose-sm dark:prose-invert max-w-none rounded-2xl rounded-tl-sm border bg-card px-4 py-3 text-card-foreground shadow-sm",
+        "rounded-2xl rounded-tl-sm border bg-card px-4 py-3 text-card-foreground shadow-sm",
+        "ai-response",
       )}
     >
-      {text}
-      {isStreaming && <span className="ml-0.5 inline-block w-1.5 h-4 align-text-bottom bg-current animate-pulse" />}
+      {html ? <div dangerouslySetInnerHTML={{ __html: html }} /> : <>{text}</>}
+      {isStreaming && (
+        <span className="ml-0.5 inline-block w-1.5 h-4 align-text-bottom bg-current animate-pulse" />
+      )}
     </div>
   );
 }

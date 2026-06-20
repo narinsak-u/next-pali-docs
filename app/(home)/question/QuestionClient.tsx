@@ -2,12 +2,30 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Bot, User, X } from "lucide-react";
-import { useAIChat, AIMessage, ChatInput } from "@/components/ai";
+import { useAIChat, AIMessage, ChatStatus, ChatInput } from "@/components/ai";
+import { cn } from "@/lib/utils";
+
+const SUGGESTIONS = [
+  "กาลในอาขยาตมีอะไรบ้าง",
+  "ช่วยอธิบายความต่างของสมาสและสนธิในภาษาบาลี",
+  "จงวิเคราะห์ คนฺธมาลาทิหตฺถา ว่าเป็นสมาสอะไรบ้าง",
+];
 
 export function QuestionClient() {
   const [input, setInput] = useState("");
-  const [consumedSuggestionMsgIds, setConsumedSuggestionMsgIds] = useState<Set<string>>(new Set());
-  const { messages, status, error, sendMessage, regenerate, stop, clear } = useAIChat();
+  const [consumedSuggestionMsgIds, setConsumedSuggestionMsgIds] = useState<
+    Set<string>
+  >(new Set());
+  const {
+    messages,
+    status,
+    phase,
+    error,
+    sendMessage,
+    regenerate,
+    stop,
+    clear,
+  } = useAIChat();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -15,6 +33,11 @@ export function QuestionClient() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const handleSend = (text: string) => {
+    setInput("");
+    void sendMessage({ text });
+  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] max-w-4xl mx-auto w-full">
@@ -34,14 +57,20 @@ export function QuestionClient() {
 
         {messages.map((m) =>
           m.role === "user" ? (
-            <div key={m.id} className="flex w-full justify-end animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div
+              key={m.id}
+              className="flex w-full justify-end animate-in fade-in slide-in-from-bottom-2 duration-300"
+            >
               <div className="flex gap-3 max-w-[85%] lg:max-w-[75%] flex-row-reverse">
                 <div className="flex size-8 shrink-0 items-center justify-center rounded-full border shadow-sm bg-background">
                   <User className="size-4 text-muted-foreground" />
                 </div>
                 <div className="relative px-5 py-2 shadow-sm bg-primary text-primary-foreground rounded-2xl rounded-tr-sm">
                   {(Array.isArray(m.parts) ? m.parts : [])
-                    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+                    .filter(
+                      (p): p is { type: "text"; text: string } =>
+                        p.type === "text",
+                    )
                     .map((p, i) => (
                       <span key={i}>{p.text}</span>
                     ))}
@@ -55,7 +84,7 @@ export function QuestionClient() {
               consumedSuggestionMsgIds={consumedSuggestionMsgIds}
               onSelectSuggestion={(text) => {
                 setInput("");
-                setConsumedSuggestionMsgIds(prev => new Set(prev).add(m.id));
+                setConsumedSuggestionMsgIds((prev) => new Set(prev).add(m.id));
                 void sendMessage({ text });
               }}
             />
@@ -74,6 +103,29 @@ export function QuestionClient() {
           >
             <X className="size-3" />
           </button>
+        </div>
+      )}
+
+      <ChatStatus phase={phase} />
+
+      {messages.length === 0 && (
+        <div className="max-w-4xl mx-auto w-full px-4 pb-2">
+          <div className="flex flex-wrap justify-center gap-2">
+            {SUGGESTIONS.map((s, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => handleSend(s)}
+                className={cn(
+                  "rounded-full cursor-pointer border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800",
+                  "hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500",
+                  "dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:bg-emerald-950/60",
+                )}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

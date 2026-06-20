@@ -6,13 +6,17 @@ export const maxDuration = 30;
 
 export async function POST(req: Request) {
   try {
+    // Parse and validate the incoming quiz request
     const data = await req.json();
     const parsed = quizSchema.parse(data);
+
+    // Generate questions via SSE stream: search → generate → done
     const stream = await generateQuizStream({
       topics: parsed.topics,
       amount: parsed.amount,
     });
 
+    // Return SSE response so the client receives questions one-by-one
     return new Response(stream, {
       headers: {
         "Content-Type": "text/event-stream",
@@ -36,6 +40,7 @@ export async function POST(req: Request) {
   }
 }
 
+// Detect API quota exhaustion for user-friendly error messages
 function isQuotaError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   return err.message.includes("quota") || err.message.includes("429");
