@@ -1,13 +1,6 @@
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { convertToModelMessages, streamText, UIMessage } from "ai";
 import { runRAG } from "@/lib/services/rag-pipeline";
-
-// change to use llm model from openrouter
-const openrouter = createOpenAICompatible({
-  name: "openrouter",
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.PROVIDER_API_KEY,
-});
+import { openrouter } from "@/lib/services/openrouter-client";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;

@@ -1,10 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
 import { generateSuggestions } from "./suggestions";
-import { generateText } from "ai";
+import { generateText, Output } from "ai";
 
 vi.mock("ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("ai")>();
-  return { ...actual, generateText: vi.fn() };
+  return {
+    ...actual,
+    generateText: vi.fn(),
+    Output: {
+      ...actual.Output,
+      object: ({ schema }: { schema: { parse: (input: unknown) => unknown } }) =>
+        ({ schema }) as unknown as ReturnType<typeof Output.object>,
+    },
+  };
 });
 
 const mockedGenerateText = vi.mocked(generateText);
@@ -26,7 +34,7 @@ describe("generateSuggestions", () => {
 
     await generateSuggestions("answer");
 
-    const call = mockedGenerateText.mock.calls[0]?.[0] as { experimental_output: { schema: { parse: (input: unknown) => unknown } } };
+    const call = mockedGenerateText.mock.calls[0]?.[0] as unknown as { experimental_output: { schema: { parse: (input: unknown) => unknown } } };
     expect(call).toBeDefined();
     const parsed = call.experimental_output.schema.parse({ suggestions: ["x", "y", "z"] });
     expect(parsed).toEqual({ suggestions: ["x", "y", "z"] });
