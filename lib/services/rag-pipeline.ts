@@ -1,16 +1,13 @@
-import { embed } from "ai";
-import { openai } from "@ai-sdk/openai";
 import {
   queryPinecone,
   formatContext,
   type DocumentMatch,
 } from "./vector-store";
+import { generateEmbedding } from "./embedding";
 import type { UIMessage } from "ai";
 
 export interface RAGOptions {
   topK?: number;
-  embeddingModel?: string;
-  embeddingDimensions?: number;
 }
 
 export interface RAGResult {
@@ -18,6 +15,8 @@ export interface RAGResult {
   matches: DocumentMatch[];
 }
 
+// extract text from user messages for RAG processing
+// returns the text content of the last user message, or an empty string if none exists
 export function extractTextFromMessages(messages: UIMessage[]): string {
   const lastMessage = messages[messages.length - 1];
   if (!lastMessage) return "";
@@ -33,32 +32,26 @@ export function extractTextFromMessages(messages: UIMessage[]): string {
   return "";
 }
 
+// handles the RAG pipeline:
+// - extracts text from messages,
+// - generates an embedding (1024-dim),
+// - and queries the vector store
 export async function runRAG(
   messages: UIMessage[],
   options: RAGOptions = {},
 ): Promise<RAGResult> {
-  const topK = options.topK ?? 10;
-  const embeddingModel = options.embeddingModel ?? "text-embedding-3-small";
-  const embeddingDimensions = options.embeddingDimensions ?? 1536;
-
+  const topK = options.topK ?? 5;
   const text = extractTextFromMessages(messages);
 
   if (!text) {
     return { context: "", matches: [] };
   }
 
-  const { embedding } = await embed({
-    model: openai.embedding(embeddingModel),
-    value: text,
-    providerOptions: {
-      openai: {
-        dimensions: embeddingDimensions,
-      },
-    },
-  });
-
+  const embedding = await generateEmbedding(text);
   const matches = await queryPinecone(embedding, topK);
   const context = formatContext(matches);
+  console.log(matches, "matches");
+  console.log(context, "context");
 
   return { context, matches };
 }

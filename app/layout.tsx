@@ -52,8 +52,6 @@ export default function Layout({ children }: { children: ReactNode }) {
         <Provider>
           <div lang="th">{children}</div>
         </Provider>
-
-        <script src="https://cdn.jsdelivr.net/npm/@docsearch/react@3"></script>
       </body>
     </html>
   );

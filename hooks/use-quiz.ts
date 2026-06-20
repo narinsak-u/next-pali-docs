@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useCallback } from "react";
-import { quizTopics } from "@/data/quiz-topic";
+import { quizTopicsById } from "@/data/quiz-topic";
 import { mapQuestionsFromResponse } from "@/helpers/map-questions";
 import type { Question } from "@/lib/schemas/quiz";
 
@@ -43,7 +43,7 @@ export function useQuiz(): UseQuizReturn {
 
   const startQuiz = useCallback(
     async (topicId: string) => {
-      const topic = quizTopics.find((t) => t.id === topicId);
+      const topic = quizTopicsById.get(topicId);
       if (!topic) {
         console.error("Topic not found");
         return;
@@ -79,15 +79,12 @@ export function useQuiz(): UseQuizReturn {
   const timeUp = useCallback(() => {
     ui.markExpired();
 
-    const updatedAnswers = { ...data.answers };
-    data.questions.forEach((q) => {
-      if (!updatedAnswers[q.id]) {
-        updatedAnswers[q.id] = "time-expired";
+    data.setAnswers((prev) => {
+      const next = { ...prev };
+      for (const q of data.questions) {
+        if (!next[q.id]) next[q.id] = "time-expired";
       }
-    });
-
-    Object.keys(updatedAnswers).forEach((key) => {
-      data.answer(key, updatedAnswers[key]);
+      return next;
     });
 
     ui.markComplete();

@@ -9,6 +9,7 @@ interface UseQuizDataReturn {
   answers: Record<string, string>;
   setTopic: (topicId: string | null) => void;
   setQuestions: (qs: Question[]) => void;
+  setAnswers: (next: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
   answer: (questionId: string, optionId: string) => void;
   clearAnswers: () => void;
 }
@@ -43,6 +44,7 @@ export function useQuizData(): UseQuizDataReturn {
     answers,
     setTopic,
     setQuestions: setQuestionsHandler,
+    setAnswers,
     answer,
     clearAnswers,
   };

@@ -6,11 +6,13 @@ export interface DocumentMatch {
   text: string;
 }
 
+const namespace = process.env.PINECONE_NAMESPACE ?? "";
+
 export async function queryPinecone(
   embedding: number[],
   topK: number = 10
 ): Promise<DocumentMatch[]> {
-  const results = await index.namespace("__default__").query({
+  const results = await index.namespace(namespace).query({
     vector: embedding,
     topK,
     includeMetadata: true,
