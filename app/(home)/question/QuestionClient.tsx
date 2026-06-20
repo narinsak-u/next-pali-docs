@@ -1,56 +1,13 @@
 "use client";
 
-import { useChat } from "@ai-sdk/react";
-import { cn } from "@/lib/utils";
-import { buttonVariants } from "@/components/ui/button";
-import { Loader2, RefreshCw, Send, User, Bot, Trash2 } from "lucide-react";
-import { useRef, useEffect, useState, type ComponentProps } from "react";
-import { DefaultChatTransport } from "ai";
+import { useEffect, useRef, useState } from "react";
+import { Bot, User, X } from "lucide-react";
+import { useAIChat, AIMessage, ChatInput } from "@/components/ai";
 
 export function QuestionClient() {
   const [input, setInput] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const { messages, stop, setMessages, status, sendMessage, regenerate } =
-    useChat({
-      transport: new DefaultChatTransport({
-        api: "/api/question",
-      }),
-      onError: (err) => {
-        console.error("Chat error:", err);
-        if (
-          err?.message?.includes("quota") ||
-          err?.message?.includes("429") ||
-          err?.message?.includes("Rate limit")
-        ) {
-          setError(
-            "บริการ AI หมดโควต้าการใช้งาน กรุณาลองใหม่อีกครั้งในภายหลัง",
-          );
-        } else {
-          setError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง");
-        }
-      },
-    });
-
+  const { messages, status, error, sendMessage, regenerate, stop, clear } = useAIChat();
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  const handleSubmit = async (text: string) => {
-    setError(null);
-    try {
-      sendMessage({ text });
-    } catch (err: unknown) {
-      console.error("Send error:", err);
-      const message = err instanceof Error ? err.message : "";
-      if (
-        message.includes("quota") ||
-        message.includes("429") ||
-        message.includes("Rate limit")
-      ) {
-        setError("บริการ AI หมดโควต้าการใช้งาน กรุณาลองใหม่อีกครั้งในภายหลัง");
-      } else {
-        setError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง");
-      }
-    }
-  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -73,193 +30,63 @@ export function QuestionClient() {
             </p>
           </div>
         )}
-        {/*
-        {status === "streaming" && messages[messages.length - 1]?.role === "assistant" && (
-          <div className="flex justify-start w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="flex gap-3 max-w-[85%] lg:max-w-[75%] flex-row">
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-full border shadow-sm bg-primary text-primary-foreground">
-                <Bot className="size-4" />
-              </div>
-              <div className="relative px-5 py-3.5 shadow-sm bg-card border text-card-foreground rounded-2xl rounded-tl-sm">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" />
-                  <span className="text-sm">กำลังคิด...</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )} */}
 
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={cn(
-              "flex w-full animate-in fade-in slide-in-from-bottom-2 duration-300",
-              m.role === "user" ? "justify-end" : "justify-start",
-            )}
-          >
-            <div
-              className={cn(
-                "flex gap-3 max-w-[85%] lg:max-w-[75%]",
-                m.role === "user" ? "flex-row-reverse" : "flex-row",
-              )}
-            >
-              <div
-                className={cn(
-                  "flex size-8 shrink-0 items-center justify-center rounded-full border shadow-sm",
-                  m.role === "user"
-                    ? "bg-background"
-                    : "bg-primary text-primary-foreground",
-                )}
-              >
-                {m.role === "user" ? (
+        {messages.map((m) =>
+          m.role === "user" ? (
+            <div key={m.id} className="flex w-full justify-end animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="flex gap-3 max-w-[85%] lg:max-w-[75%] flex-row-reverse">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-full border shadow-sm bg-background">
                   <User className="size-4 text-muted-foreground" />
-                ) : (
-                  <Bot className="size-4" />
-                )}
-              </div>
-              <div
-                className={cn(
-                  "relative px-5 py-2 shadow-sm",
-                  m.role === "user"
-                    ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-sm"
-                    : "bg-card border text-card-foreground rounded-2xl rounded-tl-sm",
-                )}
-              >
-                <div className="prose prose-sm dark:prose-invert break-words max-w-none">
-                  {m.parts?.map((part, index) =>
-                    part.type === "text" ? (
-                      <span key={index}>{part.text}</span>
-                    ) : null,
-                  )}
+                </div>
+                <div className="relative px-5 py-2 shadow-sm bg-primary text-primary-foreground rounded-2xl rounded-tr-sm">
+                  {(Array.isArray(m.parts) ? m.parts : [])
+                    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+                    .map((p, i) => (
+                      <span key={i}>{p.text}</span>
+                    ))}
                 </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="p-4  bg-fd-background/50 backdrop-blur-sm sticky bottom-0 z-10">
-        {error && (
-          <div className="max-w-4xl mx-auto mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 dark:bg-red-950 dark:border-red-800 dark:text-red-300 text-sm flex items-center justify-between">
-            <span>{error}</span>
-            <button
-              onClick={() => setError(null)}
-              className="ml-2 text-red-500 hover:text-red-700 dark:hover:text-red-300"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-        <div className="max-w-4xl mx-auto relative flex flex-col gap-2">
-          {messages.length > 0 && status === "ready" && (
-            <div className="flex justify-center gap-2 mb-2">
-              <button
-                onClick={() => regenerate()}
-                className={cn(
-                  buttonVariants({ variant: "outline", size: "sm" }),
-                  "gap-2 rounded-full",
-                )}
-              >
-                <RefreshCw className="size-3" />
-                Regenerate
-              </button>
-              <button
-                onClick={() => setMessages([])}
-                className={cn(
-                  buttonVariants({ variant: "outline", size: "sm" }),
-                  "gap-2 rounded-full",
-                )}
-              >
-                <Trash2 className="size-3" />
-                Clear
-              </button>
-            </div>
-          )}
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-
-              if (input.trim()) {
-                void handleSubmit(input);
+          ) : (
+            <AIMessage
+              key={m.id}
+              message={m}
+              onSelectSuggestion={(text) => {
                 setInput("");
-              }
-            }}
-            className="relative flex items-center justify-center gap-2"
-          >
-            <TextareaInput
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              disabled={status !== "ready"}
-              placeholder={
-                status === "streaming" ? "กำลังคิด..." : "ถามคำถาม..."
-              }
-              className="pr-12 min-h-[52px] max-h-[200px]"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  if (input.trim()) {
-                    void handleSubmit(input);
-                    setInput("");
-                  }
-                }
+                void sendMessage({ text });
               }}
             />
-            <div className="">
-              {status === "streaming" ? (
-                <button
-                  type="button"
-                  onClick={() => stop()}
-                  className={cn(
-                    buttonVariants({ size: "icon", variant: "ghost" }),
-                    "h-8 w-8 rounded-full",
-                  )}
-                >
-                  <Loader2 className="size-4 animate-spin" />
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={status !== "ready"}
-                  className={cn(
-                    buttonVariants({ size: "icon", variant: "default" }),
-                    "h-8 w-8 rounded-full",
-                  )}
-                >
-                  <Send className="size-4" />
-                </button>
-              )}
-            </div>
-          </form>
-          <p className="text-xs text-center text-fd-muted-foreground mt-2">
-            AI can make mistakes. Please check important information.
-          </p>
-        </div>
+          ),
+        )}
       </div>
-    </div>
-  );
-}
 
-function TextareaInput(props: ComponentProps<"textarea">) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Auto-resize
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "inherit";
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    }
-  }, [props.value]);
-
-  return (
-    <textarea
-      ref={textareaRef}
-      {...props}
-      className={cn(
-        "flex w-full rounded-2xl border border-fd-input bg-fd-background px-4 py-3 text-sm ring-offset-fd-background placeholder:text-fd-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none overflow-hidden",
-        props.className,
+      {error && (
+        <div className="max-w-4xl mx-auto mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 dark:bg-red-950 dark:border-red-800 dark:text-red-300 text-sm flex items-center justify-between">
+          <span>{error}</span>
+          <button
+            onClick={() => {
+              /* error clears on next send */
+            }}
+            className="ml-2 text-red-500 hover:text-red-700 dark:hover:text-red-300"
+          >
+            <X className="size-3" />
+          </button>
+        </div>
       )}
-    />
+
+      <ChatInput
+        value={input}
+        onChange={setInput}
+        onSubmit={(text) => {
+          setInput("");
+          void sendMessage({ text });
+        }}
+        status={status}
+        onStop={stop}
+        onRegenerate={regenerate}
+        onClear={clear}
+        hasMessages={messages.length > 0}
+      />
+    </div>
   );
 }
