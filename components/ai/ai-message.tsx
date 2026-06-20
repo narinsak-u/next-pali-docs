@@ -6,6 +6,7 @@ import { ResponseStep } from "./response-step";
 import { SuggestionStep } from "./suggestion-step";
 import { ProcessBadge } from "./process-badge";
 import { ProcessDetails } from "./process-details";
+import { ProcessStepsInline } from "./process-steps-inline";
 import {
   type ReasoningPart,
   type TaskPart,
@@ -81,6 +82,14 @@ export function AIMessage({
     })),
   ];
 
+  const lastTaskStatus = taskPartsLatest.at(-1)?.data.status;
+  const isDone =
+    suggestionParts.length > 0 ||
+    (text.length > 0 &&
+      (lastTaskStatus === "done" ||
+        lastTaskStatus === "error" ||
+        taskPartsLatest.length === 0));
+
   const totalMatches = taskPartsLatest.reduce(
     (sum, t) => sum + (t.data.matchCount ?? 0),
     0,
@@ -94,6 +103,12 @@ export function AIMessage({
 
   return (
     <div className="flex flex-col gap-2 w-full" data-testid="ai-message">
+      <ProcessStepsInline
+        steps={processSteps}
+        reasoning={reasoningParts}
+        tasks={taskPartsLatest}
+        isDone={isDone}
+      />
       {text && <ResponseStep text={text} isStreaming={false} />}
 
       {badgeLabel && (
