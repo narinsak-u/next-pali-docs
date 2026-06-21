@@ -121,4 +121,36 @@ describe("generateQuizStream (UIMessageStream)", () => {
     const question = writes[5] as { data: { question: string } };
     expect(question.data.question).toBe("Q1");
   });
+
+  it("emits a data-task error then continues with empty context when queryPinecone throws", async () => {
+    const { queryPinecone } = await import("@/lib/services/vector-store");
+    vi.mocked(queryPinecone).mockRejectedValueOnce(new Error("pinecone down"));
+
+    const result = (await generateQuizStream({
+      topics: ["x"],
+      amount: 1,
+    })) as unknown as { body: { writer: WriterMock } };
+
+    const writes = result.body.writer.writes;
+    const errorTask = writes.find(
+      (w) =>
+        w.type === "data-task" &&
+        (w.data as { status: string }).status === "error",
+    );
+    expect(errorTask).toBeDefined();
+    expect((errorTask!.data as { message: string }).message).toBe(
+      "pinecone down",
+    );
+
+    const doneTask = writes.find(
+      (w) =>
+        w.type === "data-task" &&
+        (w.data as { status: string; matchCount: number }).status === "done",
+    );
+    expect(doneTask).toBeDefined();
+    expect((doneTask!.data as { matchCount: number }).matchCount).toBe(0);
+
+    const reasoning = writes.find((w) => w.type === "data-reasoning");
+    expect(reasoning).toBeDefined();
+  });
 });
