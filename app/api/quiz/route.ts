@@ -1,33 +1,33 @@
-import { generateQuizStream } from "@/lib/services/quiz-pipeline";
+import { createUIMessageStreamResponse } from "ai";
+import { generateQuizStream, isQuotaError } from "@/lib/services/quiz-pipeline";
 import { quizSchema } from "@/lib/schemas/quiz";
 import { NextResponse } from "next/server";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   try {
-    // Parse and validate the incoming quiz request
-    const data = await req.json();
-    const parsed = quizSchema.parse(data);
+    const body = await req.json();
+    const messages = body.messages ?? [];
+    const lastUserMessage = messages.findLast(
+      (m: { role: string }) => m.role === "user",
+    );
+    const rawText = lastUserMessage
+      ? (lastUserMessage.parts?.[0]?.text ?? lastUserMessage.content)
+      : undefined;
+    const payload = rawText ? JSON.parse(rawText) : body;
+    const parsed = quizSchema.parse(payload);
 
-    // Generate questions via SSE stream: search → generate → done
-    const stream = await generateQuizStream({
+    const stream = generateQuizStream({
       topics: parsed.topics,
       amount: parsed.amount,
+      topicId: parsed.topicId,
     });
 
-    // Return SSE response so the client receives questions one-by-one
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      },
-    });
+    return createUIMessageStreamResponse({ stream });
   } catch (error: unknown) {
     console.error("Quiz API error:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    if (isQuotaError(error) || message.includes("429")) {
+    if (isQuotaError(error)) {
       return NextResponse.json(
         { error: "บริการ AI หมดโควต้าการใช้งาน กรุณาลองใหม่อีกครั้งในภายหลัง" },
         { status: 429 },
@@ -38,10 +38,4 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
-}
-
-// Detect API quota exhaustion for user-friendly error messages
-function isQuotaError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  return err.message.includes("quota") || err.message.includes("429");
 }

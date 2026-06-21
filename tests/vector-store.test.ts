@@ -1,15 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const mockedNamespace = vi.hoisted(() => vi.fn());
+const mockedIndex = vi.hoisted(() => ({ namespace: mockedNamespace }));
+
 vi.mock("@/lib/pinecone", () => ({
-  index: {
-    namespace: vi.fn(),
-  },
+  index: mockedIndex,
 }));
 
 import { queryPinecone, formatContext, type DocumentMatch } from "@/lib/services/vector-store";
-import { index } from "@/lib/pinecone";
-
-const mockedNamespace = vi.mocked(index.namespace);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -39,7 +37,7 @@ describe("formatContext", () => {
 describe("queryPinecone", () => {
   it("returns empty array when no matches returned", async () => {
     const mockQuery = vi.fn().mockResolvedValue({ matches: [] });
-    mockedNamespace.mockReturnValue({ query: mockQuery } as never);
+    mockedNamespace.mockReturnValue({ query: mockQuery });
 
     const result = await queryPinecone([0.1, 0.2], 5);
 
@@ -60,7 +58,7 @@ describe("queryPinecone", () => {
         { id: "c", score: 0.0, metadata: { text: "" } },
       ],
     });
-    mockedNamespace.mockReturnValue({ query: mockQuery } as never);
+    mockedNamespace.mockReturnValue({ query: mockQuery });
 
     const result = await queryPinecone([0.1], 3);
 
@@ -77,7 +75,7 @@ describe("queryPinecone", () => {
         { id: "a", metadata: null },
       ],
     });
-    mockedNamespace.mockReturnValue({ query: mockQuery } as never);
+    mockedNamespace.mockReturnValue({ query: mockQuery });
 
     const result = await queryPinecone([0.1], 5);
 

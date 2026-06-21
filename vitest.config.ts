@@ -9,10 +9,12 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
     include: ['**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts', '**/*.spec.tsx'],
+    exclude: ['.worktrees/**', 'node_modules/**', '.next/**', 'dist/**'],
   },
   resolve: {
-    alias: {
-      '@': resolve(__dirname, './'),
-    },
+    alias: [
+      { find: '@', replacement: resolve(__dirname, './') },
+      { find: '@tests/', replacement: resolve(__dirname, './tests') + '/' },
+    ],
   },
 })

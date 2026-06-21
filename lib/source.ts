@@ -2,7 +2,7 @@ import { docs, meta, blog as blogPosts } from "@/.source";
 import { loader } from "fumadocs-core/source";
 import { createMDXSource } from "fumadocs-mdx";
 import { icons } from "lucide-react";
-import { createElement } from "react";
+import { cache, createElement } from "react";
 
 // See https://fumadocs.vercel.app/docs/headless/source-api for more info
 export const source = loader({
@@ -22,4 +22,12 @@ export const source = loader({
 export const blog = loader({
   baseUrl: "/blog",
   source: createMDXSource(blogPosts),
+});
+
+export const getCachedPage = cache((slug: string[] | undefined) => {
+  return source.getPage(slug);
+});
+
+export const getCachedBlogPage = cache((slug: string) => {
+  return blog.getPage([slug]);
 });

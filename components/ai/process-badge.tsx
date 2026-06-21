@@ -50,7 +50,8 @@ export function ProcessBadge({ label, children }: ProcessBadgeProps) {
         <div
           data-testid="process-badge-popover"
           role="dialog"
-          className="absolute z-50 mt-1 w-80 max-h-96 overflow-auto rounded-md border bg-popover p-3 text-popover-foreground shadow-md"
+          aria-label="Process details"
+          className="mt-1 w-full overflow-auto rounded-md border bg-popover p-3 text-popover-foreground shadow-md"
         >
           {children}
         </div>

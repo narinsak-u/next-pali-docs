@@ -9,22 +9,9 @@ import { ProcessDetails } from "./process-details";
 import { ProcessStepsInline } from "./process-steps-inline";
 import {
   type ReasoningPart,
-  type TaskPart,
   type SuggestionsPart,
 } from "@/lib/schemas/ai-data-parts";
-
-type DataPart =
-  | { type: "data-reasoning"; data: ReasoningPart }
-  | { type: "data-task"; data: TaskPart }
-  | { type: "data-suggestions"; data: SuggestionsPart };
-
-function isDataPart(p: UIMessage["parts"][number]): p is DataPart {
-  return (
-    p.type === "data-reasoning" ||
-    p.type === "data-task" ||
-    p.type === "data-suggestions"
-  );
-}
+import { reduceTaskParts, type DataTaskPart } from "@/lib/chat/reduce-task-parts";
 
 export function AIMessage({
   message,
@@ -42,32 +29,20 @@ export function AIMessage({
     .join("");
 
   const reasoningParts: Array<{ type: "data-reasoning"; data: ReasoningPart }> = [];
-  const taskPartsLatest: Array<{ type: "data-task"; data: TaskPart }> = [];
   const suggestionParts: Array<{ type: "data-suggestions"; data: SuggestionsPart }> = [];
-  const seenTaskIds = new Set<string>();
+  const rawTaskParts: DataTaskPart[] = [];
 
   for (const p of parts) {
     if (p.type === "data-reasoning") {
       reasoningParts.push(p as { type: "data-reasoning"; data: ReasoningPart });
     } else if (p.type === "data-task") {
-      const data = (p as { type: "data-task"; data: TaskPart }).data;
-      if (data.id) {
-        if (seenTaskIds.has(data.id)) {
-          const existing = taskPartsLatest.find((t) => t.data.id === data.id);
-          if (existing) {
-            existing.data = { ...existing.data, status: data.status };
-          }
-        } else {
-          seenTaskIds.add(data.id);
-          taskPartsLatest.push(p as { type: "data-task"; data: TaskPart });
-        }
-      } else {
-        taskPartsLatest.push(p as { type: "data-task"; data: TaskPart });
-      }
+      rawTaskParts.push(p as DataTaskPart);
     } else if (p.type === "data-suggestions") {
       suggestionParts.push(p as { type: "data-suggestions"; data: SuggestionsPart });
     }
   }
+
+  const taskPartsLatest: DataTaskPart[] = reduceTaskParts(rawTaskParts);
 
   const processSteps: StepDescriptor[] = [
     ...reasoningParts.map((_, i) => ({
@@ -133,5 +108,3 @@ export function AIMessage({
     </div>
   );
 }
-
-export { isDataPart };

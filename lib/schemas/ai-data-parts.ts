@@ -20,6 +20,15 @@ export const suggestionsPartSchema = z.object({
   suggestions: z.array(z.string().min(1)).min(1).max(3),
 });
 
+export const questionPartSchema = z.object({
+  id: z.string().min(1),
+  question: z.string().min(1),
+  answer: z.string().min(1),
+  option1: z.string().min(1),
+  option2: z.string().min(1),
+  option3: z.string().min(1),
+});
+
 export const statusPartSchema = z.object({
   phase: z.enum(["thinking", "searching", "answering"]),
   message: z.string().optional(),
@@ -28,5 +37,6 @@ export const statusPartSchema = z.object({
 export type ReasoningPart = z.infer<typeof reasoningPartSchema>;
 export type TaskPart = z.infer<typeof taskPartSchema>;
 export type SuggestionsPart = z.infer<typeof suggestionsPartSchema>;
+export type QuestionPart = z.infer<typeof questionPartSchema>;
 export type StatusPart = z.infer<typeof statusPartSchema>;
 export type TaskStatus = z.infer<typeof taskStatusSchema>;

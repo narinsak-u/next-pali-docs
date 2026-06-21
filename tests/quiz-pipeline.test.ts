@@ -1,99 +1,107 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("ai", () => ({
-  streamText: vi.fn(),
-  tool: vi.fn((opts) => opts),
-  stepCountIs: vi.fn(() => vi.fn()),
+  streamText: vi.fn(() => ({
+    text: Promise.resolve(
+      JSON.stringify({
+        questions: [
+          { question: "Q1", answer: "A1", option1: "x", option2: "y", option3: "z" },
+        ],
+      }),
+    ),
+  })),
+  createUIMessageStream: vi.fn((opts) => {
+    const writes: Array<Record<string, unknown>> = [];
+    const writer = {
+      writes,
+      write: vi.fn((w: Record<string, unknown>) => writes.push(w)),
+      merge: vi.fn(async () => {}),
+    };
+    return Promise.resolve(opts.execute({ writer })).then(() => ({
+      body: { writer },
+    }));
+  }),
+}));
+
+vi.mock("@/data/quiz-content.json", () => ({
+  default: {
+    "1": {
+      title: "Test",
+      content: "Mock content for topic 1",
+    },
+  },
 }));
 
 vi.mock("@/lib/services/llm-provider", () => ({
-  llm: vi.fn(() => ({ modelId: "mock" })),
-  getDefaultModel: vi.fn(() => "mock-model"),
+  llm: vi.fn(),
+  getDefaultModel: vi.fn(() => "mock"),
 }));
 
-vi.mock("@/lib/services/vector-store", () => ({
-  queryPinecone: vi.fn(),
-  formatContext: vi.fn(),
-}));
+import { generateQuizStream } from "@/lib/services/quiz-pipeline";
 
-vi.mock("@/lib/services/embedding", () => ({
-  generateEmbedding: vi.fn(),
-}));
-
-import { streamText } from "ai";
-import { generateQuiz, isQuotaError } from "@/lib/services/quiz-pipeline";
-import { formatContext } from "@/lib/services/vector-store";
-import { generateEmbedding } from "@/lib/services/embedding";
-import { queryPinecone } from "@/lib/services/vector-store";
-
-const mockedStreamText = vi.mocked(streamText);
-const mockedFormatContext = vi.mocked(formatContext);
+interface WriterMock {
+  writes: Array<Record<string, unknown>>;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("isQuotaError", () => {
-  it("returns true for quota errors", () => {
-    expect(isQuotaError(new Error("quota exceeded"))).toBe(true);
-    expect(isQuotaError(new Error("API quota"))).toBe(true);
-    expect(isQuotaError(new Error("429 Too Many Requests"))).toBe(true);
-  });
+describe("generateQuizStream (UIMessageStream)", () => {
+  it("emits searching → task → answering → question with topicId", async () => {
+    const result = (await generateQuizStream({
+      topics: ["x"],
+      amount: 1,
+      topicId: "1",
+    })) as unknown as { body: { writer: WriterMock } };
 
-  it("returns false for non-quota errors", () => {
-    expect(isQuotaError(new Error("network error"))).toBe(false);
-    expect(isQuotaError(new Error("timeout"))).toBe(false);
-  });
+    const writes = result.body.writer.writes;
+    const types = writes.map((w) => w.type);
 
-  it("returns false for non-Error objects", () => {
-    expect(isQuotaError("quota exceeded")).toBe(false);
-    expect(isQuotaError(null)).toBe(false);
-    expect(isQuotaError({ message: "quota" })).toBe(false);
-  });
-});
-
-describe("generateQuiz", () => {
-  it("calls embedding, vectorStore, and streamText with correct args", async () => {
-    const fakeEmbedding = {
-      generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2]),
-    };
-    const fakeVectorStore = {
-      queryPinecone: vi.fn().mockResolvedValue([
-        { id: "a", score: 0.9, text: "passage A" },
-      ]),
-    };
-    mockedFormatContext.mockReturnValue("formatted context");
-
-    const fakeResponse = new Response("stream");
-    mockedStreamText.mockReturnValue({
-      toTextStreamResponse: vi.fn().mockReturnValue(fakeResponse),
-    } as never);
-
-    const result = await generateQuiz(
-      { topics: ["dhamma", "sacca"], amount: 5 },
-      { embedding: fakeEmbedding, vectorStore: fakeVectorStore },
-    );
-
-    expect(fakeEmbedding.generateEmbedding).toHaveBeenCalledWith("dhamma, sacca");
-    expect(fakeVectorStore.queryPinecone).toHaveBeenCalledWith([0.1, 0.2], 10);
-    expect(mockedFormatContext).toHaveBeenCalledWith([
-      { id: "a", score: 0.9, text: "passage A" },
+    expect(types).toEqual([
+      "data-status",
+      "data-task",
+      "data-task",
+      "data-status",
+      "data-question",
     ]);
-    expect(mockedStreamText).toHaveBeenCalledOnce();
-    expect(result).toBe(fakeResponse);
+
+    const status1 = writes[0] as { data: { phase: string } };
+    expect(status1.data.phase).toBe("searching");
+
+    const taskRunning = writes[1] as { data: { status: string; label: string } };
+    expect(taskRunning.data.label).toBe("ค้นหาเอกสาร");
+    expect(taskRunning.data.status).toBe("running");
+
+    const taskDone = writes[2] as { data: { status: string; matchCount: number } };
+    expect(taskDone.data.status).toBe("done");
+    expect(taskDone.data.matchCount).toBe(1);
+
+    const status2 = writes[3] as { data: { phase: string } };
+    expect(status2.data.phase).toBe("answering");
+
+    const question = writes[4] as { data: { question: string } };
+    expect(question.data.question).toBe("Q1");
   });
 
-  it("uses default embedding/vectorStore when no deps provided", async () => {
-    vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
-    vi.mocked(queryPinecone).mockResolvedValue([]);
-    mockedFormatContext.mockReturnValue("");
-    mockedStreamText.mockReturnValue({
-      toTextStreamResponse: vi.fn().mockReturnValue(new Response("")),
-    } as never);
+  it("works without topicId (empty context)", async () => {
+    const result = (await generateQuizStream({
+      topics: ["x"],
+      amount: 1,
+    })) as unknown as { body: { writer: WriterMock } };
 
-    await generateQuiz({ topics: ["anatta"], amount: 3 });
+    const writes = result.body.writer.writes;
+    const types = writes.map((w) => w.type);
 
-    expect(generateEmbedding).toHaveBeenCalledWith("anatta");
-    expect(queryPinecone).toHaveBeenCalledWith([0.1], 10);
+    expect(types).toEqual([
+      "data-status",
+      "data-task",
+      "data-task",
+      "data-status",
+      "data-question",
+    ]);
+
+    const taskDone = writes[2] as { data: { matchCount: number } };
+    expect(taskDone.data.matchCount).toBe(0);
   });
 });

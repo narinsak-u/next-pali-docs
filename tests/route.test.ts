@@ -71,6 +71,10 @@ vi.mock("ai", () => ({
 }));
 
 vi.mock("@/lib/services/rag-pipeline", () => ({ searchDocuments: vi.fn() }));
+vi.mock("@/lib/pinecone", () => ({
+  pc: { inference: { embed: vi.fn() } },
+  index: { namespace: vi.fn(() => ({ query: vi.fn() })) },
+}));
 vi.mock("@/lib/services/llm-provider", () => ({
   llm: vi.fn(),
   getDefaultModel: vi.fn(() => "mock"),
@@ -202,6 +206,35 @@ describe("POST /api/question", () => {
       expect((errored!.data as { message: string }).message).toMatch(
         /Pinecone/,
       );
+    });
+
+    it("only runs searchDocuments once and emits one error when LLM calls searchDocs 4 times", async () => {
+      mockedSearch.mockRejectedValue(new Error("Pinecone timeout"));
+
+      const result = (await POST(
+        makeReq({
+          messages: [
+            { id: "1", role: "user", parts: [{ type: "text", text: "x" }] },
+          ],
+        }),
+      )) as unknown as { body: { writer: WriterMock } };
+
+      const tool = captured.searchDocs!;
+      expect(tool).toBeDefined();
+
+      await tool.execute({ query: "q1" }, { toolCallId: "tc-1" });
+      await tool.execute({ query: "q2" }, { toolCallId: "tc-2" });
+      await tool.execute({ query: "q3" }, { toolCallId: "tc-3" });
+      await tool.execute({ query: "q4" }, { toolCallId: "tc-4" });
+
+      const errorWrites = result.body.writer.writes.filter(
+        (w) =>
+          w.type === "data-task" &&
+          (w.data as { status: string }).status === "error",
+      );
+
+      expect(mockedSearch).toHaveBeenCalledTimes(1);
+      expect(errorWrites).toHaveLength(1);
     });
   });
 

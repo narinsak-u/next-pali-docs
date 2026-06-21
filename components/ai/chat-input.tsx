@@ -37,6 +37,7 @@ export function ChatInput(props: {
         {props.hasMessages && props.status === "ready" && (
           <div className="flex justify-center gap-2 mb-2">
             <button
+              type="button"
               onClick={props.onRegenerate}
               className={cn(
                 buttonVariants({ variant: "outline", size: "sm" }),
@@ -47,6 +48,7 @@ export function ChatInput(props: {
               Regenerate
             </button>
             <button
+              type="button"
               onClick={props.onClear}
               className={cn(
                 buttonVariants({ variant: "outline", size: "sm" }),

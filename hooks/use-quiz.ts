@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useCallback, useRef } from "react";
+import type { UIMessage } from "ai";
 import { quizTopicsById } from "@/data/quiz-topic";
 import { mapQuestionsFromResponse } from "@/helpers/map-questions";
 import type { Question } from "@/lib/schemas/quiz";
@@ -22,7 +23,12 @@ interface UseQuizReturn {
   isLoading: boolean;
   error: Error | null;
   matchCount: number;
+  messages: UIMessage[];
+  status: string;
+  phase: "idle" | "searching" | "generating" | "done" | "error";
   isGenerating: boolean;
+  renderedCount: number;
+  totalExpected: number;
   allQuestionsAnswered: boolean;
   answeredQuestionsCount: number;
   progressPercentage: number;
@@ -61,6 +67,7 @@ export function useQuiz(): UseQuizReturn {
       ai.submit({
         amount: topic.amount,
         topics: topic.keywords,
+        topicId: topic.id,
       });
     },
     [ai, data, flow, ui],
@@ -76,6 +83,7 @@ export function useQuiz(): UseQuizReturn {
   const goToPage = useCallback(
     (page: number) => {
       ui.setPage(page);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     },
     [ui],
   );
@@ -93,12 +101,20 @@ export function useQuiz(): UseQuizReturn {
 
     ui.markComplete();
     flow.goToResults();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }, [data, flow, ui]);
 
   const submitQuiz = useCallback(() => {
     ui.markComplete();
     flow.goToResults();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }, [flow, ui]);
+
+  const selectedTopicData = quizTopicsById.get(data.selectedTopic ?? "");
+  const totalExpected = selectedTopicData?.amount ?? 0;
+  const isGenerating =
+    ai.status === "streaming" && ai.questions.length < totalExpected;
+  const renderedCount = ai.questions.length;
 
   const restartQuiz = useCallback(() => {
     flow.goToHome();
@@ -115,6 +131,7 @@ export function useQuiz(): UseQuizReturn {
       const mapped = mapQuestionsFromResponse(ai.questions);
       data.setQuestions(mapped);
       flow.goToQuiz();
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [ai.questions, data, flow]);
 
@@ -125,12 +142,6 @@ export function useQuiz(): UseQuizReturn {
       data.setQuestions(mapped);
     }
   }, [ai.questions]);
-
-  useEffect(() => {
-    if (flow.appState === "quiz" || flow.appState === "results") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }, [ui.currentPage, flow.appState]);
 
   return {
     appState: flow.appState,
@@ -143,7 +154,12 @@ export function useQuiz(): UseQuizReturn {
     isLoading: ai.phase === "searching" || ai.phase === "generating",
     error: ai.error,
     matchCount: ai.matchCount,
-    isGenerating: ai.phase === "generating",
+    messages: ai.messages,
+    status: ai.status,
+  phase: ai.phase,
+  isGenerating,
+  renderedCount,
+  totalExpected,
     allQuestionsAnswered: stats.allQuestionsAnswered,
     answeredQuestionsCount: stats.answeredQuestionsCount,
     progressPercentage: stats.progressPercentage,

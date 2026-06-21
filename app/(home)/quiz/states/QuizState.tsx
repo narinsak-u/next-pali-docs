@@ -5,7 +5,8 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { QuizPagination } from "../components/QuizPagination";
 import { Button } from "@/components/ui/button";
 import { Question, QuizQuestion } from "../components/QuizQuestont";
-import { CheckCircle, Loader2 } from "lucide-react";
+import { QuizProcess } from "../components/QuizProcess";
+import { CheckCircle } from "lucide-react";
 
 type Props = {
   selectedTopic: string | null;
@@ -21,7 +22,7 @@ type Props = {
   handleTimeUp: () => void;
   handleSelectOption: (questionId: string, optionId: string) => void;
   handleSubmitQuiz: () => void;
-  isGenerating?: boolean;
+  quizContext?: { messages: import("ai").UIMessage[]; matchCount: number };
 };
 
 const QuizState = ({
@@ -38,9 +39,8 @@ const QuizState = ({
   handleTimeUp,
   handleSelectOption,
   handleSubmitQuiz,
-  isGenerating = false,
+  quizContext,
 }: Props) => {
-  // Pagination setup
   const questionsPerPage = 5;
   const totalPages = Math.ceil(questions.length / questionsPerPage);
   const currentQuestions = questions.slice(
@@ -84,11 +84,14 @@ const QuizState = ({
           <Progress value={progressPercentage} className="h-2" />
         </div>
 
-        {isGenerating && (
-          <div className="flex items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin text-primary" />
-            <span>กำลังสร้างคำถามเพิ่มเติม...</span>
-          </div>
+        {quizContext && (
+          <QuizProcess
+            messages={quizContext.messages}
+            isStreaming={false}
+            matchCount={quizContext.matchCount}
+            error={null}
+            mode="badge-only"
+          />
         )}
 
         <Card>
@@ -113,7 +116,6 @@ const QuizState = ({
                 onPageChange={setCurrentPage}
               />
 
-              {/* Show submit button on any page if all questions are answered */}
               <div className="flex flex-col gap-2 items-end">
                 {allQuestionsAnswered && (
                   <div className="flex items-center gap-2 text-sm text-green-600">

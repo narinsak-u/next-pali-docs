@@ -1,11 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/pinecone", () => ({
-  pc: {
-    inference: {
-      embed: vi.fn(),
-    },
-  },
+  pc: { inference: { embed: vi.fn() } },
 }));
 
 import { generateEmbedding, generateEmbeddings } from "@/lib/services/embedding";
