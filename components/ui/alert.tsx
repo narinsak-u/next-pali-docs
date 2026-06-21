@@ -1,4 +1,5 @@
 import * as React from "react"
+import { AlertCircleIcon } from "lucide-react"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
@@ -63,4 +64,33 @@ function AlertDescription({
   )
 }
 
-export { Alert, AlertTitle, AlertDescription }
+function AlertDemo({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description?: string
+  children?: React.ReactNode
+}) {
+  return (
+    <div className="grid w-full items-start gap-4">
+      <Alert>
+        <AlertCircleIcon />
+        <AlertTitle>{title}</AlertTitle>
+        <AlertDescription className="mt-1">
+          {!description && children ? (
+            <div className="mt-[-8px]">{children}</div>
+          ) : (
+            <>
+              {description}
+              <div className="mt-[-16px]">{children}</div>
+            </>
+          )}
+        </AlertDescription>
+      </Alert>
+    </div>
+  )
+}
+
+export { Alert, AlertTitle, AlertDescription, AlertDemo }
