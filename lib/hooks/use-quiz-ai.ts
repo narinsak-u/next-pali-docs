@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useReducer, useRef, useCallback } from "react";
 
 type QuizPhase = "idle" | "searching" | "generating" | "done" | "error";
 
@@ -12,6 +12,45 @@ interface QuizQuestion {
   option3: string;
 }
 
+type QuizAiState = {
+  phase: QuizPhase;
+  matchCount: number;
+  questions: QuizQuestion[];
+  error: Error | null;
+};
+
+type QuizAiAction =
+  | { type: "RESET" }
+  | { type: "SET_MATCHES"; count: number }
+  | { type: "SET_QUESTIONS"; questions: QuizQuestion[] }
+  | { type: "APPEND_QUESTIONS"; questions: QuizQuestion[] }
+  | { type: "SET_PHASE"; phase: QuizPhase }
+  | { type: "SET_ERROR"; error: Error | null };
+
+const initialQuizAiState: QuizAiState = {
+  phase: "idle",
+  matchCount: 0,
+  questions: [],
+  error: null,
+};
+
+function quizAiReducer(state: QuizAiState, action: QuizAiAction): QuizAiState {
+  switch (action.type) {
+    case "RESET":
+      return initialQuizAiState;
+    case "SET_MATCHES":
+      return { ...state, matchCount: action.count };
+    case "SET_QUESTIONS":
+      return { ...state, questions: action.questions };
+    case "APPEND_QUESTIONS":
+      return { ...state, questions: [...state.questions, ...action.questions] };
+    case "SET_PHASE":
+      return { ...state, phase: action.phase };
+    case "SET_ERROR":
+      return { ...state, error: action.error };
+  }
+}
+
 interface UseQuizAIReturn {
   phase: QuizPhase;
   matchCount: number;
@@ -21,22 +60,19 @@ interface UseQuizAIReturn {
 }
 
 export function useQuizAI(): UseQuizAIReturn {
-  const [phase, setPhase] = useState<QuizPhase>("idle");
-  const [matchCount, setMatchCount] = useState(0);
-  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
-  const [error, setError] = useState<Error | null>(null);
+  const [state, dispatch] = useReducer(quizAiReducer, initialQuizAiState);
   const abortRef = useRef<AbortController | null>(null);
+  const requestIdRef = useRef(0);
 
   const submit = useCallback(
     async (payload: { topics: string[]; amount: number }) => {
+      const reqId = ++requestIdRef.current;
       abortRef.current?.abort();
       const abort = new AbortController();
       abortRef.current = abort;
 
-      setPhase("searching");
-      setQuestions([]);
-      setMatchCount(0);
-      setError(null);
+      dispatch({ type: "RESET" });
+      dispatch({ type: "SET_PHASE", phase: "searching" });
 
       try {
         const response = await fetch("/api/quiz", {
@@ -58,6 +94,8 @@ export function useQuizAI(): UseQuizAIReturn {
         let buffer = "";
 
         while (true) {
+          if (requestIdRef.current !== reqId) break;
+
           const { done, value } = await reader.read();
           if (done) break;
 
@@ -67,25 +105,28 @@ export function useQuizAI(): UseQuizAIReturn {
           buffer = events.remainder;
 
           for (const { event, data } of events.parsed) {
+            if (requestIdRef.current !== reqId) break;
             switch (event) {
               case "search-done":
-                setMatchCount(getNum(data, "matchCount"));
-                setPhase("generating");
+                dispatch({ type: "SET_MATCHES", count: getNum(data, "matchCount") });
+                dispatch({ type: "SET_PHASE", phase: "generating" });
                 break;
               case "question":
-                setQuestions((prev) => [
-                  ...prev,
-                  {
-                    question: getStr(data, "question"),
-                    answer: getStr(data, "answer"),
-                    option1: getStr(data, "option1"),
-                    option2: getStr(data, "option2"),
-                    option3: getStr(data, "option3"),
-                  },
-                ]);
+                dispatch({
+                  type: "APPEND_QUESTIONS",
+                  questions: [
+                    {
+                      question: getStr(data, "question"),
+                      answer: getStr(data, "answer"),
+                      option1: getStr(data, "option1"),
+                      option2: getStr(data, "option2"),
+                      option3: getStr(data, "option3"),
+                    },
+                  ],
+                });
                 break;
               case "done":
-                setPhase("done");
+                dispatch({ type: "SET_PHASE", phase: "done" });
                 break;
               case "error":
                 throw new Error(getStr(data, "message") || "Generation failed");
@@ -93,19 +134,23 @@ export function useQuizAI(): UseQuizAIReturn {
           }
         }
       } catch (err: unknown) {
+        if (requestIdRef.current !== reqId) return;
         if (err instanceof Error && err.name === "AbortError") return;
-        setError(err instanceof Error ? err : new Error("Unknown error"));
-        setPhase("error");
+        dispatch({
+          type: "SET_ERROR",
+          error: err instanceof Error ? err : new Error("Unknown error"),
+        });
+        dispatch({ type: "SET_PHASE", phase: "error" });
       }
     },
     [],
   );
 
   return {
-    phase,
-    matchCount,
-    questions,
-    error,
+    phase: state.phase,
+    matchCount: state.matchCount,
+    questions: state.questions,
+    error: state.error,
     submit,
   };
 }
