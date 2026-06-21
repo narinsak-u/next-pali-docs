@@ -28,7 +28,11 @@ function mapErrorToThai(err: Error): string {
   return "เกิดข้อผิดพลาดในการสร้างแบบทดสอบ กรุณาลองใหม่อีกครั้ง";
 }
 
-function deriveState(messages: UIMessage[], status: string, error: Error | undefined) {
+function deriveState(
+  messages: UIMessage[],
+  status: ReturnType<typeof useChat>["status"],
+  error: Error | undefined,
+) {
   if (error) {
     return { phase: "error" as const, matchCount: 0, questions: [] };
   }
