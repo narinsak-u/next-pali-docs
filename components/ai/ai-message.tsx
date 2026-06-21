@@ -44,7 +44,7 @@ export function AIMessage({
   const reasoningParts: Array<{ type: "data-reasoning"; data: ReasoningPart }> = [];
   const taskPartsLatest: Array<{ type: "data-task"; data: TaskPart }> = [];
   const suggestionParts: Array<{ type: "data-suggestions"; data: SuggestionsPart }> = [];
-  const seenTaskIds = new Set<string>();
+  const taskById = new Map<string, { type: "data-task"; data: TaskPart }>();
 
   for (const p of parts) {
     if (p.type === "data-reasoning") {
@@ -52,14 +52,13 @@ export function AIMessage({
     } else if (p.type === "data-task") {
       const data = (p as { type: "data-task"; data: TaskPart }).data;
       if (data.id) {
-        if (seenTaskIds.has(data.id)) {
-          const existing = taskPartsLatest.find((t) => t.data.id === data.id);
-          if (existing) {
-            existing.data = { ...existing.data, status: data.status };
-          }
+        const existing = taskById.get(data.id);
+        if (existing) {
+          existing.data = { ...existing.data, status: data.status };
         } else {
-          seenTaskIds.add(data.id);
-          taskPartsLatest.push(p as { type: "data-task"; data: TaskPart });
+          const fresh = p as { type: "data-task"; data: TaskPart };
+          taskById.set(data.id, fresh);
+          taskPartsLatest.push(fresh);
         }
       } else {
         taskPartsLatest.push(p as { type: "data-task"; data: TaskPart });
