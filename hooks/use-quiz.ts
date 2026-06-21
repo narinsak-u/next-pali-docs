@@ -76,6 +76,7 @@ export function useQuiz(): UseQuizReturn {
   const goToPage = useCallback(
     (page: number) => {
       ui.setPage(page);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     },
     [ui],
   );
@@ -93,11 +94,13 @@ export function useQuiz(): UseQuizReturn {
 
     ui.markComplete();
     flow.goToResults();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }, [data, flow, ui]);
 
   const submitQuiz = useCallback(() => {
     ui.markComplete();
     flow.goToResults();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }, [flow, ui]);
 
   const restartQuiz = useCallback(() => {
@@ -115,6 +118,7 @@ export function useQuiz(): UseQuizReturn {
       const mapped = mapQuestionsFromResponse(ai.questions);
       data.setQuestions(mapped);
       flow.goToQuiz();
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [ai.questions, data, flow]);
 
@@ -125,12 +129,6 @@ export function useQuiz(): UseQuizReturn {
       data.setQuestions(mapped);
     }
   }, [ai.questions]);
-
-  useEffect(() => {
-    if (flow.appState === "quiz" || flow.appState === "results") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }, [ui.currentPage, flow.appState]);
 
   return {
     appState: flow.appState,
