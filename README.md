@@ -99,7 +99,7 @@ Read the [Introduction](https://fumadocs.dev/docs/mdx) for further details.
 
 Got a question about Pali grammar? The AI chat searches the textbook corpus and answers with relevant references — like having a Pali scholar right beside you.
 
-![Chat screenshot](/chat_screenshot.png)
+![Chat screenshot](/public/chat_screenshot.png)
 
 Here's how it works under the hood:
 
@@ -138,7 +138,7 @@ LLM responds with grounded answer + follow-up suggestions
 
 Choose a topic, and the AI generates multiple-choice questions on the spot. No waiting — questions arrive in one batch with a handy phase indicator showing progress.
 
-![Quiz screenshot](/quiz_screenshot.png)
+![Quiz screenshot](/public/quiz_screenshot.png)
 
 The flow is dead simple:
 
