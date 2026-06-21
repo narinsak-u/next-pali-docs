@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { InlineTOC } from "fumadocs-ui/components/inline-toc";
-import { blog } from "@/lib/source";
+import { blog, getCachedBlogPage } from "@/lib/source";
 import { createMetadata } from "@/lib/metadata";
 import { buttonVariants } from "@/components/ui/button";
 import { Control } from "@/app/(home)/blog/[slug]/page.client";
@@ -13,7 +13,7 @@ export default async function Page(props: {
   params: Promise<{ slug: string }>;
 }) {
   const params = await props.params;
-  const page = blog.getPage([params.slug]);
+  const page = getCachedBlogPage(params.slug);
 
   if (!page) notFound();
   const { body: Mdx, toc } = await page.data.load();
@@ -81,7 +81,7 @@ export async function generateMetadata(props: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const params = await props.params;
-  const page = blog.getPage([params.slug]);
+  const page = getCachedBlogPage(params.slug);
 
   if (!page) notFound();
 
