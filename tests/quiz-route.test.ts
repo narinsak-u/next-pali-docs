@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@/lib/services/quiz-pipeline", () => ({
-  generateQuizStream: vi.fn(),
-}));
+vi.mock("@/lib/services/quiz-pipeline", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/services/quiz-pipeline")>();
+  return {
+    ...actual,
+    generateQuizStream: vi.fn(),
+  };
+});
 
 import { POST } from "@/app/api/quiz/route";
 import { generateQuizStream } from "@/lib/services/quiz-pipeline";

@@ -11,6 +11,7 @@ import { searchDocuments } from "@/lib/services/rag-pipeline";
 import { llm, getDefaultModel } from "@/lib/services/llm-provider";
 import { PALI_EXPERT_SYSTEM_PROMPT } from "@/lib/chat/pali-system-prompt";
 import { formatContext, type DocumentMatch } from "@/lib/services/vector-store";
+import { isQuotaError } from "@/lib/services/quiz-pipeline";
 
 export const runtime = "edge";
 export const maxDuration = 120;
@@ -191,7 +192,7 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     console.error("Question API error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    if (message.includes("quota") || message.includes("429")) {
+    if (isQuotaError(error)) {
       return new Response(
         JSON.stringify({
           error: "insufficient_quota",

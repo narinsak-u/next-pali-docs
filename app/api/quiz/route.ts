@@ -1,4 +1,4 @@
-import { generateQuizStream } from "@/lib/services/quiz-pipeline";
+import { generateQuizStream, isQuotaError } from "@/lib/services/quiz-pipeline";
 import { quizSchema } from "@/lib/schemas/quiz";
 import { NextResponse } from "next/server";
 
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     console.error("Quiz API error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    if (isQuotaError(error) || message.includes("429")) {
+    if (isQuotaError(error)) {
       return NextResponse.json(
         { error: "บริการ AI หมดโควต้าการใช้งาน กรุณาลองใหม่อีกครั้งในภายหลัง" },
         { status: 429 },
@@ -39,10 +39,4 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
-}
-
-// Detect API quota exhaustion for user-friendly error messages
-function isQuotaError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  return err.message.includes("quota") || err.message.includes("429");
 }
