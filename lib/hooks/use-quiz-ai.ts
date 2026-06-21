@@ -14,7 +14,7 @@ export interface UseQuizAIReturn {
   questions: QuestionPart[];
   error: Error | null;
   messages: UIMessage[];
-  status: string;
+  status: ReturnType<typeof useChat>["status"];
   submit: (payload: { topics: string[]; amount: number }) => void;
   stop: () => void;
   clear: () => void;
@@ -92,7 +92,7 @@ export function useQuizAI(): UseQuizAIReturn {
     questions: derived.questions,
     error: thaiError,
     messages,
-    status: status as string,
+    status,
     submit,
     stop,
     clear,

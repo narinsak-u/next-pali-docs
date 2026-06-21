@@ -197,11 +197,11 @@ As SSE `question` events arrive, the client works in real-time:
 
 | Phase | App State | UI |
 |-------|-----------|-----|
-| Searching | `loading` | LoadingOverlay: "กำลังค้นหาเนื้อหา..." + search icon |
-| Generating | `loading` | LoadingOverlay: "AI กำลังสร้างแบบทดสอบ" + match count |
-| First question | `quiz` | QuizState appears with first question + "กำลังสร้างคำถามเพิ่มเติม..." |
-| Stream in progress | `quiz` | Questions appear one by one, banner still visible |
-| Done | `quiz` | All questions visible, banner gone |
+| Searching | `loading` | QuizProcess: inline `ProcessStepsInline` rail with "กำลังค้นหาเอกสาร..." task + "Reasoning" card |
+| Generating | `loading` | Same rail, task transitions to "เสร็จสิ้น · พบ N รายการ" + "Reasoning" card with excerpts |
+| First question | `quiz` | `QuizState` appears with first question + "กำลังสร้างคำถามเพิ่มเติม..."; the inline rail collapses, leaving a `ProcessBadge` at the top of the card |
+| Stream in progress | `quiz` | Questions appear one by one; badge remains visible, clickable to expand the excerpts |
+| Done | `quiz` | All questions visible, rail is gone, badge stays |
 
 ### 5. Question Mapping
 
@@ -292,7 +292,7 @@ flow.goToResults();
 | `app/(home)/quiz/components/QuizTimer.tsx` | Countdown timer |
 | `app/(home)/quiz/components/QuizQuestont.tsx` | Question + options display |
 | `app/(home)/quiz/components/QuizPagination.tsx` | Page navigation |
-| `app/(home)/quiz/components/LoadingOverlay.tsx` | Phased loading screen (searching → generating) |
+| `app/(home)/quiz/components/QuizProcess.tsx` | Loading orchestrator: composes `ProcessStepsInline` + `ProcessBadge` + `ProcessDetails` (mode="full" for loading, mode="badge-only" for persistent badge) |
 | `app/(home)/quiz/components/Disclaimer.tsx` | Disclaimer footer |
 | `hooks/use-quiz.ts` | Orchestrator hook |
 | `lib/hooks/use-quiz-flow.ts` | App state machine |
@@ -312,7 +312,7 @@ flow.goToResults();
 | State | Component | Description |
 |-------|-----------|-------------|
 | `home` | `HomeState` | Topic selection grid |
-| `loading` | `LoadingOverlay` | Phased: "กำลังค้นหาเนื้อหา..." → "AI กำลังสร้างแบบทดสอบ" |
+| `loading` | `QuizProcess` (mode="full") | Inline process steps rail showing searching → generating, with a `ProcessBadge` for the reasoning excerpts |
 | `quiz` | `QuizState` | Questions (appear progressively), timer, pagination, generating banner |
 | `results` | `ResultState` | Score and answer review |
 
