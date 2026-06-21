@@ -1,99 +1,124 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const captured = vi.hoisted(() => ({
+  submitQuestions: null as { execute: (...args: unknown[]) => Promise<unknown> } | null,
+  stopWhen: null as unknown,
+}));
+
 vi.mock("ai", () => ({
-  streamText: vi.fn(),
+  streamText: vi.fn((opts) => {
+    captured.stopWhen = opts.stopWhen;
+    captured.submitQuestions = opts.tools?.submitQuestions ?? null;
+    return {
+      toUIMessageStream: vi.fn(
+        () =>
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue({ type: "finish", finishReason: "stop" });
+              controller.close();
+            },
+          }),
+      ),
+      consumeStream: vi.fn(async () => {
+        if (captured.submitQuestions?.execute) {
+          await captured.submitQuestions.execute(
+            {
+              questions: [
+                { question: "Q1", answer: "A1", option1: "x", option2: "y", option3: "z" },
+              ],
+            },
+            { toolCallId: "tc-1" },
+          );
+        }
+      }),
+      text: Promise.resolve(""),
+    };
+  }),
+  createUIMessageStream: vi.fn((opts) => {
+    const writes: Array<Record<string, unknown>> = [];
+    const writer = {
+      writes,
+      write: vi.fn((w: Record<string, unknown>) => writes.push(w)),
+      merge: vi.fn(async () => {}),
+    };
+    return Promise.resolve(opts.execute({ writer })).then(() => ({
+      body: { writer },
+    }));
+  }),
   tool: vi.fn((opts) => opts),
   stepCountIs: vi.fn(() => vi.fn()),
 }));
 
-vi.mock("@/lib/services/llm-provider", () => ({
-  llm: vi.fn(() => ({ modelId: "mock" })),
-  getDefaultModel: vi.fn(() => "mock-model"),
-}));
-
-vi.mock("@/lib/services/vector-store", () => ({
-  queryPinecone: vi.fn(),
-  formatContext: vi.fn(),
+vi.mock("@/lib/pinecone", () => ({
+  pc: { inference: { embed: vi.fn() } },
+  index: { namespace: vi.fn(() => ({ query: vi.fn() })) },
 }));
 
 vi.mock("@/lib/services/embedding", () => ({
-  generateEmbedding: vi.fn(),
+  generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2]),
 }));
 
-import { streamText } from "ai";
-import { generateQuiz, isQuotaError } from "@/lib/services/quiz-pipeline";
-import { formatContext } from "@/lib/services/vector-store";
-import { generateEmbedding } from "@/lib/services/embedding";
-import { queryPinecone } from "@/lib/services/vector-store";
+vi.mock("@/lib/services/vector-store", () => ({
+  queryPinecone: vi.fn().mockResolvedValue([
+    { id: "a", score: 0.9, text: "passage A" },
+    { id: "b", score: 0.8, text: "passage B" },
+  ]),
+  formatContext: vi.fn().mockReturnValue("MOCK CTX"),
+}));
 
-const mockedStreamText = vi.mocked(streamText);
-const mockedFormatContext = vi.mocked(formatContext);
+vi.mock("@/lib/services/llm-provider", () => ({
+  llm: vi.fn(),
+  getDefaultModel: vi.fn(() => "mock"),
+}));
+
+import { generateQuizStream } from "@/lib/services/quiz-pipeline";
+
+interface WriterMock {
+  writes: Array<Record<string, unknown>>;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("isQuotaError", () => {
-  it("returns true for quota errors", () => {
-    expect(isQuotaError(new Error("quota exceeded"))).toBe(true);
-    expect(isQuotaError(new Error("API quota"))).toBe(true);
-    expect(isQuotaError(new Error("429 Too Many Requests"))).toBe(true);
-  });
+describe("generateQuizStream (UIMessageStream)", () => {
+  it("emits searching → task running/done → reasoning → answering → question", async () => {
+    const result = (await generateQuizStream({
+      topics: ["x"],
+      amount: 1,
+    })) as unknown as { body: { writer: WriterMock } };
 
-  it("returns false for non-quota errors", () => {
-    expect(isQuotaError(new Error("network error"))).toBe(false);
-    expect(isQuotaError(new Error("timeout"))).toBe(false);
-  });
+    const writes = result.body.writer.writes;
+    const types = writes.map((w) => w.type);
 
-  it("returns false for non-Error objects", () => {
-    expect(isQuotaError("quota exceeded")).toBe(false);
-    expect(isQuotaError(null)).toBe(false);
-    expect(isQuotaError({ message: "quota" })).toBe(false);
-  });
-});
-
-describe("generateQuiz", () => {
-  it("calls embedding, vectorStore, and streamText with correct args", async () => {
-    const fakeEmbedding = {
-      generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2]),
-    };
-    const fakeVectorStore = {
-      queryPinecone: vi.fn().mockResolvedValue([
-        { id: "a", score: 0.9, text: "passage A" },
-      ]),
-    };
-    mockedFormatContext.mockReturnValue("formatted context");
-
-    const fakeResponse = new Response("stream");
-    mockedStreamText.mockReturnValue({
-      toTextStreamResponse: vi.fn().mockReturnValue(fakeResponse),
-    } as never);
-
-    const result = await generateQuiz(
-      { topics: ["dhamma", "sacca"], amount: 5 },
-      { embedding: fakeEmbedding, vectorStore: fakeVectorStore },
-    );
-
-    expect(fakeEmbedding.generateEmbedding).toHaveBeenCalledWith("dhamma, sacca");
-    expect(fakeVectorStore.queryPinecone).toHaveBeenCalledWith([0.1, 0.2], 10);
-    expect(mockedFormatContext).toHaveBeenCalledWith([
-      { id: "a", score: 0.9, text: "passage A" },
+    expect(types).toEqual([
+      "data-status",
+      "data-task",
+      "data-task",
+      "data-reasoning",
+      "data-status",
+      "data-question",
     ]);
-    expect(mockedStreamText).toHaveBeenCalledOnce();
-    expect(result).toBe(fakeResponse);
-  });
 
-  it("uses default embedding/vectorStore when no deps provided", async () => {
-    vi.mocked(generateEmbedding).mockResolvedValue([0.1]);
-    vi.mocked(queryPinecone).mockResolvedValue([]);
-    mockedFormatContext.mockReturnValue("");
-    mockedStreamText.mockReturnValue({
-      toTextStreamResponse: vi.fn().mockReturnValue(new Response("")),
-    } as never);
+    const status1 = writes[0] as { data: { phase: string } };
+    expect(status1.data.phase).toBe("searching");
 
-    await generateQuiz({ topics: ["anatta"], amount: 3 });
+    const taskRunning = writes[1] as { data: { status: string; label: string } };
+    expect(taskRunning.data.label).toBe("ค้นหาเอกสาร");
+    expect(taskRunning.data.status).toBe("running");
 
-    expect(generateEmbedding).toHaveBeenCalledWith("anatta");
-    expect(queryPinecone).toHaveBeenCalledWith([0.1], 10);
+    const taskDone = writes[2] as { data: { status: string; matchCount: number } };
+    expect(taskDone.data.status).toBe("done");
+    expect(taskDone.data.matchCount).toBe(2);
+
+    const reasoning = writes[3] as { data: { summary: string; excerpts: string[] } };
+    expect(reasoning.data.summary).toMatch(/2 รายการ/);
+    expect(reasoning.data.excerpts).toHaveLength(2);
+
+    const status2 = writes[4] as { data: { phase: string } };
+    expect(status2.data.phase).toBe("answering");
+
+    const question = writes[5] as { data: { question: string } };
+    expect(question.data.question).toBe("Q1");
   });
 });
