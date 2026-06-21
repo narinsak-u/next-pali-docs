@@ -1,15 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/pinecone", () => ({
-  index: {
-    namespace: vi.fn(),
-  },
+  getIndex: vi.fn(),
 }));
 
 import { queryPinecone, formatContext, type DocumentMatch } from "@/lib/services/vector-store";
-import { index } from "@/lib/pinecone";
+import { getIndex } from "@/lib/pinecone";
 
-const mockedNamespace = vi.mocked(index.namespace);
+const mockedGetIndex = vi.mocked(getIndex);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -39,11 +37,13 @@ describe("formatContext", () => {
 describe("queryPinecone", () => {
   it("returns empty array when no matches returned", async () => {
     const mockQuery = vi.fn().mockResolvedValue({ matches: [] });
-    mockedNamespace.mockReturnValue({ query: mockQuery } as never);
+    const mockNamespace = vi.fn().mockReturnValue({ query: mockQuery });
+    mockedGetIndex.mockResolvedValue({ namespace: mockNamespace } as never);
 
     const result = await queryPinecone([0.1, 0.2], 5);
 
-    expect(mockedNamespace).toHaveBeenCalledWith("");
+    expect(mockedGetIndex).toHaveBeenCalledTimes(1);
+    expect(mockNamespace).toHaveBeenCalledWith("");
     expect(mockQuery).toHaveBeenCalledWith({
       vector: [0.1, 0.2],
       topK: 5,
@@ -60,7 +60,8 @@ describe("queryPinecone", () => {
         { id: "c", score: 0.0, metadata: { text: "" } },
       ],
     });
-    mockedNamespace.mockReturnValue({ query: mockQuery } as never);
+    const mockNamespace = vi.fn().mockReturnValue({ query: mockQuery });
+    mockedGetIndex.mockResolvedValue({ namespace: mockNamespace } as never);
 
     const result = await queryPinecone([0.1], 3);
 
@@ -77,7 +78,8 @@ describe("queryPinecone", () => {
         { id: "a", metadata: null },
       ],
     });
-    mockedNamespace.mockReturnValue({ query: mockQuery } as never);
+    const mockNamespace = vi.fn().mockReturnValue({ query: mockQuery });
+    mockedGetIndex.mockResolvedValue({ namespace: mockNamespace } as never);
 
     const result = await queryPinecone([0.1], 5);
 
