@@ -95,12 +95,16 @@ Read the [Introduction](https://fumadocs.dev/docs/mdx) for further details.
 
 ## 🤖 AI Features
 
-### RAG Chat (`POST /api/question`)
+### 💬 RAG Chat — Ask Questions About Pali Grammar
 
-Uses a **Retrieval-Augmented Generation (RAG)** pipeline with tool-based architecture:
+Got a question about Pali grammar? The AI chat searches the textbook corpus and answers with relevant references — like having a Pali scholar right beside you.
+
+![Chat screenshot](/chat_screenshot.png)
+
+Here's how it works under the hood:
 
 ```
-User Message
+You ask a question
     │
     ▼
 LLM decides to search ──► searchDocs tool
@@ -115,36 +119,34 @@ LLM decides to search ──► searchDocs tool
 prepareStep injects context into system prompt
     │
     ▼
-LLM continues with retrieved context
-    │         │
-    │    suggestQuestions tool
-    │         │
-    ▼         ▼
-Streaming response to client (answer + suggestions)
+LLM responds with grounded answer + follow-up suggestions
 ```
 
-**Key components:**
+**🔧 Key components:**
 - **`app/api/question/route.ts`** — Route handler orchestrating the stream
-- **`lib/services/llm-provider.ts`** — Provider factory (OpenRouter + OpenCode switching via `PROVIDER_NAME`)
 - **`lib/services/rag-pipeline.ts`** — `searchDocuments()` (embed → query → format)
 - **`lib/services/vector-store.ts`** — Pinecone query & context formatting
 - **`lib/services/embedding.ts`** — Text embedding via Pinecone inference (LRU-cached)
 - **`lib/chat/pali-system-prompt.ts`** — Pali expert role definition
 
-**Features:**
-- Search deduplication guard — Pinecone called only once per question
-- Up to 5 tool-calling steps for DeepSeek compatibility
-- Task ID nesting in `data.id` for client-side dedup
+**✨ Highlights:**
+- 🧠 Smart search — Pinecone is called only once per question, cached for follow-ups
+- 🔧 Up to 5 tool-calling steps for DeepSeek compatibility
+- 💡 Suggests 3 follow-up questions after every answer
 
-### AI Quiz (`POST /api/quiz`)
+### 📝 AI Quiz — Test Your Knowledge
 
-Generates multiple-choice Pali grammar questions via AI with **static content** (no vector search):
+Choose a topic, and the AI generates multiple-choice questions on the spot. No waiting — questions arrive in one batch with a handy phase indicator showing progress.
+
+![Quiz screenshot](/quiz_screenshot.png)
+
+The flow is dead simple:
 
 ```
-User selects topic
+You pick a topic
     │
     ▼
-loadContent(topicId) → quiz-content.json
+loadContent(topicId) → quiz-content.json (static content)
     │
     ▼
 streamText → LLM generates JSON → parse → validate
@@ -153,88 +155,81 @@ streamText → LLM generates JSON → parse → validate
     └── [DONE]
     │
     ▼
-UI transitions from loading (with phase indicator) to quiz
+Quiz appears with timer, pagination, and results
 ```
 
-**Key components:**
+**🔧 Key components:**
 - **`app/api/quiz/route.ts`** — SSE streaming endpoint (60s timeout)
 - **`lib/services/quiz-pipeline.ts`** — Content loading + `streamText` + JSON parse
-- **`lib/hooks/use-quiz-ai.ts`** — SSE stream reader with phase derivation
-- **`hooks/use-quiz.ts`** — Orchestrator with phase-based loading display
-- **`components/ai/quiz-status.tsx`** — Phase indicator pill (searching → generating)
 - **`data/quiz-content.json`** — Curated Pali grammar content by topic
+- **`components/ai/quiz-status.tsx`** — Phase indicator (searching → generating)
+- **`hooks/use-quiz.ts`** — Orchestrator tying everything together
 
-**Features:**
-- No Pinecone dependency — context from static `data/quiz-content.json`
-- Single LLM call via `streamText` — no multi-step tool loops, works across all providers
-- Phase indicator during loading: "กำลังค้นหาเนื้อหา..." → "กำลังสร้างคำถาม..."
+**✨ Highlights:**
+- 📚 No vector DB needed — context comes from a curated JSON file (token's cost savings)
+- ⚡ Single LLM call — no multi-step tool loops, works with any provider
+- 🎯 Phase indicator shows "กำลังค้นหาเนื้อหา..." → "กำลังสร้างคำถาม..."
 
-> See [`docs/RAG-WORKFLOW.md`](./docs/RAG-WORKFLOW.md) and [`docs/QUIZ-WORKFLOW.md`](./docs/QUIZ-WORKFLOW.md) for full architecture details.
+> 📖 See [`docs/RAG-WORKFLOW.md`](./docs/RAG-WORKFLOW.md) and [`docs/QUIZ-WORKFLOW.md`](./docs/QUIZ-WORKFLOW.md) for full architecture details.
 
-## 🚀 Implementation Guide for Contributors
+## 🚀 Getting Started for Contributors
 
-### 1. Getting Started with Accounts
+### 1️⃣ Sign Up for Services
 
-Before contributing to the AI/RAG features, you'll need accounts for these services:
+You'll need these free accounts to run the AI features:
 
-| Service | Purpose | How to Get |
-|---------|---------|------------|
-| **Pinecone** | Vector database for RAG document retrieval | Sign up at [pinecone.io](https://www.pinecone.io) → Create an index (dimension: `1024`, metric: `cosine`) → Copy API key & index name |
-| **OpenRouter or OpenCode** | LLM API provider | Sign up at [openrouter.ai](https://openrouter.ai) or [opencode.ai](https://opencode.ai) → Create API key → Add credit |
-| **Algolia** | Full-text search for documentation pages | Sign up at [algolia.com](https://www.algolia.com) → Create an app → Get search & admin API keys |
+| Service | What It's For | How to Get |
+|---------|--------------|------------|
+| 🗄️ **Pinecone** | Vector DB for RAG chat search | [Sign up](https://www.pinecone.io) → Create index (dimension: `1024`, metric: `cosine`) → Grab API key |
+| 🤖 **OpenRouter** or **OpenCode** | LLM provider | Pick one → [openrouter.ai](https://openrouter.ai) or [opencode.ai](https://opencode.ai) → Create API key |
+| 🔍 **Algolia** | Full-text search for docs | [Sign up](https://www.algolia.com) → Create app → Get search & admin keys |
 
-### 2. Dataset & Vector Database Setup
+### 2️⃣ Set Up the Vector Database (for RAG Chat only)
 
-The Pinecone vector store must be populated with Pali textbook content before the RAG chat can retrieve relevant passages. (The quiz feature does NOT use Pinecone — it uses static content from `data/quiz-content.json`.)
+The quiz feature doesn't need Pinecone — it uses `data/quiz-content.json`. But the RAG chat needs textbook content indexed in Pinecone first.
 
-**Option A — From HuggingFace Dataset:**
+**Option A — HuggingFace Dataset:**
 ```
-1. Find or prepare a Pali textbook dataset on HuggingFace
-2. Write a script to load the dataset:
+1. Find a Pali textbook dataset on HuggingFace
+2. Load it with:
    from datasets import load_dataset
    dataset = load_dataset("your-org/pali-textbooks")
-3. Extract text content from the dataset entries
 ```
 
-**Option B — From Local MDX Content (current approach):**
+**Option B — Local MDX Content (current approach):**
 ```
 The project uses Fumadocs MDX files in content/docs/ as the source.
-The static.json endpoint (app/static.json/route.ts) extracts structured
-content at build time, which feeds the Algolia index. For Pinecone,
-you need a separate upsert script.
+The static.json endpoint extracts content at build time for Algolia.
+For Pinecone you'll need a separate upsert script.
 ```
 
-### 3. Data Processing Pipeline
-
-Once you have raw text, process it through these stages:
+### 3️⃣ Process Data Through the Pipeline
 
 ```
 Raw Text → Clean → Chunk → Embed → Upsert to Pinecone
 ```
 
-**a) Cleaning** — Remove irrelevant formatting, normalize whitespace, handle Thai/Pali characters:
+**a) 🧹 Cleaning** — Strip artifacts, normalize Unicode:
 ```
-- Strip HTML/markdown artifacts
-- Normalize Unicode (NFKC for Thai/Pali)
-- Remove empty or near-empty segments
-```
-
-**b) Chunking** — Split documents into searchable chunks:
-```
-- Recommended: 500-1000 character chunks with 100-char overlap
-- Use recursive character splitting (respect paragraph boundaries)
-- Preserve document title/source metadata per chunk
-- Library suggestion: LangChain's RecursiveCharacterTextSplitter
+- Remove HTML/markdown leftovers
+- Normalize Thai/Pali characters (NFKC)
+- Drop empty or near-empty segments
 ```
 
-**c) Embedding** — Convert chunks to vectors:
+**b) ✂️ Chunking** — Split into searchable pieces:
+```
+- Aim for 500-1000 character chunks with 100-char overlap
+- Respect paragraph boundaries when splitting
+- Keep document title/source metadata with each chunk
+```
+
+**c) 🧠 Embedding** — Convert text to vectors:
 
 | Model | Provider | Dimensions | Used For |
 |-------|----------|------------|----------|
-| `llama-text-embed-v2` | Pinecone Inference API | 1024 | RAG context retrieval (chat only, not quiz) |
+| `llama-text-embed-v2` | Pinecone Inference API | 1024 | RAG context retrieval (chat only) |
 
 ```ts
-// Embedding via Pinecone Inference API (see lib/services/embedding.ts)
 const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
 const result = await pc.inference.embed("llama-text-embed-v2", [text], {
   inputType: "passage",
@@ -242,47 +237,43 @@ const result = await pc.inference.embed("llama-text-embed-v2", [text], {
 });
 ```
 
-**d) Upsert to Pinecone** — Store vectors with metadata:
+**d) 📤 Upsert to Pinecone:**
+
 ```ts
-// Upsert vectors to your Pinecone index
 await index.namespace("your-namespace").upsert([
   {
     id: "doc-1-chunk-0",
-    values: embeddingVector,    // float[1024]
-    metadata: {
-      text: "original chunk text",
-      source: "path/to/document",
-      title: "Document Title",
-    },
+    values: embeddingVector,
+    metadata: { text: "...", source: "...", title: "..." },
   },
 ]);
 ```
 
-> **Note:** There is currently no built-in Pinecone upsert script in this repo. Contributors should create one following the pattern above, using the same embedding model (`llama-text-embed-v2`) to ensure query embeddings are compatible.
+> **Note:** There's no built-in Pinecone upsert script yet. You'll need to write one following the pattern above.
 
-### 4. LLM Models & Providers
+### 4️⃣ Choose Your LLM
 
-Set `PROVIDER_NAME` to choose your LLM backend (`openrouter` or `opencode`, default: `openrouter`).
+Set `PROVIDER_NAME` to pick your backend (`openrouter` or `opencode`, default: `openrouter`).
 
-| Feature | Default Model | Provider |
-|---------|--------------|----------|
-| **RAG Chat** | Configurable per provider | OpenRouter or OpenCode |
-| **Quiz Generation** | Configurable per provider | OpenRouter or OpenCode |
+| Feature | Default Model |
+|---------|--------------|
+| 🗣️ **RAG Chat** | Configurable per provider |
+| 📝 **Quiz Generation** | Configurable per provider |
 
-| Provider | Env Vars for Model | Default |
-|----------|-------------------|---------|
-| OpenRouter | `OPENROUTER_LLM_MODEL` or `LLM_MODEL` | `google/gemma-3-27b-it:free` |
+| Provider | Env Var | Default Model |
+|----------|---------|---------------|
+| OpenRouter | `OPENROUTER_LLM_MODEL` | `google/gemma-3-27b-it:free` |
 | OpenCode | `OPENCODE_LLM_MODEL` | `deepseek-v4-flash` |
 
-Both providers use `createOpenAICompatible` from `@ai-sdk/openai-compatible` (see `lib/services/llm-provider.ts`).
+Both use `createOpenAICompatible` from `@ai-sdk/openai-compatible` (see `lib/services/llm-provider.ts`).
 
-### 5. Environment Setup
+### 5️⃣ Configure Environment
 
-Copy `.env.example` (or create `.env.local`) with:
+Copy `.env.example` → `.env.local`:
 
 ```env
-# LLM Provider (choose one)
-PROVIDER_NAME=openrouter   # or "opencode" for OpenCode's DeepSeek models
+# 🤖 LLM Provider (pick one - openrouter (free or pay-as-you-go), and opencode (need to subscribe Go at least)
+PROVIDER_NAME=openrouter   # or "opencode"
 
 # Option A: OpenRouter
 OPENROUTER_API_KEY=sk-or-v1-...
@@ -292,46 +283,42 @@ OPENROUTER_LLM_MODEL=google/gemma-3-27b-it:free
 OPENCODE_API_KEY=sk-...
 OPENCODE_LLM_MODEL=deepseek-v4-flash
 
-# Pinecone (vector database — required for RAG Chat, NOT for Quiz)
+# 🗄️ Pinecone (needed for RAG Chat, NOT for Quiz)
 PINECONE_API_KEY=pcsk_...
 PINECONE_INDEX_NAME=pali-docs
 PINECONE_NAMESPACE=textbooks
 
-# Algolia (full-text search)
+# 🔍 Algolia (full-text search)
 NEXT_PUBLIC_ALGOLIA_APP_ID=...
 NEXT_PUBLIC_ALGOLIA_SEARCH_API_KEY=...
-ALGOLIA_API_KEY=...              # admin key for indexing
+ALGOLIA_API_KEY=...
 ALGOLIA_INDEX_NAME=pali_docs
 ```
 
-### 6. Running the Indexing
+### 6️⃣ Run Indexing
 
 ```bash
-# Build the project first (generates static.json)
+# Build first (generates static.json)
 npm run build
 
-# Sync content to Algolia
+# Sync to Algolia
 npm run index
 
-# For Pinecone: run your upsert script (see section 3d above)
+# For Pinecone: run your own upsert script
 node scripts/upsert-pinecone.mjs
 ```
 
-### 7. Development
+### 7️⃣ Start Developing
 
 ```bash
-npm run dev      # Start dev server with Turbopack
-npm test         # Run all tests in watch mode
-npm run test:run # Run all tests once
+npm run dev          # Dev server with Turbopack
+npm test             # Watch mode tests
+npm run test:run     # Run all tests once
 npx vitest run tests/route.test.ts  # Single test
 ```
 
-## Learn More
+## 📚 Learn More
 
-To learn more about Next.js and Fumadocs, take a look at the following
-resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js
-  features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [Fumadocs](https://fumadocs.vercel.app) - learn about Fumadocs
+- [Next.js Docs](https://nextjs.org/docs) — framework fundamentals
+- [Learn Next.js](https://nextjs.org/learn) — interactive tutorial
+- [Fumadocs](https://fumadocs.vercel.app) — documentation framework
