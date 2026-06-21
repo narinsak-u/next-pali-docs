@@ -138,36 +138,36 @@ Streaming response to client (answer + suggestions)
 
 ### AI Quiz (`POST /api/quiz`)
 
-Generates multiple-choice Pali grammar questions with **real-time streaming**:
+Generates multiple-choice Pali grammar questions via AI with **static content** (no vector search):
 
 ```
 User selects topic
     │
     ▼
-generateEmbedding → queryPinecone → search-done (SSE)
+loadContent(topicId) → quiz-content.json
     │
     ▼
-streamText + submitQuestions tool
+streamText → LLM generates JSON → parse → validate
     │
-    ├── question (SSE) — question 1
-    ├── question (SSE) — question 2
-    ├── ...
-    └── done (SSE)
+    ├── data-question (SSE) — all questions at once
+    └── [DONE]
     │
     ▼
-Questions appear one-by-one in the UI as they're generated
+UI transitions from loading (with phase indicator) to quiz
 ```
 
 **Key components:**
-- **`app/api/quiz/route.ts`** — SSE streaming endpoint
-- **`lib/services/quiz-pipeline.ts`** — Search + `streamText` + `submitQuestions` tool
-- **`lib/hooks/use-quiz-ai.ts`** — SSE stream reader with phase tracking
-- **`hooks/use-quiz.ts`** — Orchestrator for progressive question loading
+- **`app/api/quiz/route.ts`** — SSE streaming endpoint (60s timeout)
+- **`lib/services/quiz-pipeline.ts`** — Content loading + `streamText` + JSON parse
+- **`lib/hooks/use-quiz-ai.ts`** — SSE stream reader with phase derivation
+- **`hooks/use-quiz.ts`** — Orchestrator with phase-based loading display
+- **`components/ai/quiz-status.tsx`** — Phase indicator pill (searching → generating)
+- **`data/quiz-content.json`** — Curated Pali grammar content by topic
 
 **Features:**
-- Questions stream to UI immediately — no waiting for full generation
-- Phased loading UI: searching → generating → quiz (with banner)
-- Up to 15 tool-calling steps for large quiz batches
+- No Pinecone dependency — context from static `data/quiz-content.json`
+- Single LLM call via `streamText` — no multi-step tool loops, works across all providers
+- Phase indicator during loading: "กำลังค้นหาเนื้อหา..." → "กำลังสร้างคำถาม..."
 
 > See [`docs/RAG-WORKFLOW.md`](./docs/RAG-WORKFLOW.md) and [`docs/QUIZ-WORKFLOW.md`](./docs/QUIZ-WORKFLOW.md) for full architecture details.
 
@@ -185,7 +185,7 @@ Before contributing to the AI/RAG features, you'll need accounts for these servi
 
 ### 2. Dataset & Vector Database Setup
 
-The Pinecone vector store must be populated with Pali textbook content before the RAG chat can retrieve relevant passages.
+The Pinecone vector store must be populated with Pali textbook content before the RAG chat can retrieve relevant passages. (The quiz feature does NOT use Pinecone — it uses static content from `data/quiz-content.json`.)
 
 **Option A — From HuggingFace Dataset:**
 ```
@@ -231,7 +231,7 @@ Raw Text → Clean → Chunk → Embed → Upsert to Pinecone
 
 | Model | Provider | Dimensions | Used For |
 |-------|----------|------------|----------|
-| `llama-text-embed-v2` | Pinecone Inference API | 1024 | RAG context retrieval |
+| `llama-text-embed-v2` | Pinecone Inference API | 1024 | RAG context retrieval (chat only, not quiz) |
 
 ```ts
 // Embedding via Pinecone Inference API (see lib/services/embedding.ts)
@@ -292,7 +292,7 @@ OPENROUTER_LLM_MODEL=google/gemma-3-27b-it:free
 OPENCODE_API_KEY=sk-...
 OPENCODE_LLM_MODEL=deepseek-v4-flash
 
-# Pinecone (vector database)
+# Pinecone (vector database — required for RAG Chat, NOT for Quiz)
 PINECONE_API_KEY=pcsk_...
 PINECONE_INDEX_NAME=pali-docs
 PINECONE_NAMESPACE=textbooks

@@ -15,7 +15,7 @@ export interface UseQuizAIReturn {
   error: Error | null;
   messages: UIMessage[];
   status: ReturnType<typeof useChat>["status"];
-  submit: (payload: { topics: string[]; amount: number }) => void;
+  submit: (payload: { topics: string[]; amount: number; topicId?: string }) => void;
   stop: () => void;
   clear: () => void;
 }
@@ -71,7 +71,7 @@ export function useQuizAI(): UseQuizAIReturn {
   });
 
   const submit = useCallback(
-    (payload: { topics: string[]; amount: number }) => {
+    (payload: { topics: string[]; amount: number; topicId?: string }) => {
       setMessages([]);
       sendMessage({ text: JSON.stringify(payload) });
     },

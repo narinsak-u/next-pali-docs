@@ -2,7 +2,7 @@
 
 ## Overview
 
-The quiz feature generates multiple-choice Pali grammar questions dynamically via AI. A user selects a topic, the system retrieves relevant textbook context from Pinecone, and an LLM generates questions tailored to that context — **streaming each question to the client as it's generated**. Questions are answered under a countdown timer, and results are displayed with scoring.
+The quiz feature generates multiple-choice Pali grammar questions dynamically via AI. A user selects a topic, the system loads curated textbook content from a static JSON file, and an LLM generates questions based on that content. All questions arrive at once after generation, and results are displayed with scoring under a countdown timer.
 
 ## Architecture
 
@@ -19,7 +19,7 @@ User clicks topic
        ├── useQuizFlow → "loading"
        ├── useQuizUI  → reset pagination
        ├── useQuizData → set topic, clear answers
-       └── useQuizAI  → submit({ topics, amount })
+       └── useQuizAI  → submit({ topics, amount, topicId })
                │
                │ POST /api/quiz (SSE)
                ▼
@@ -29,21 +29,19 @@ User clicks topic
                ▼
          Quiz Pipeline (lib/services/quiz-pipeline.ts)
                │
-               ├── generateEmbedding(topics)
-               ├── queryPinecone(vector, topK=10)
-               ├── SSE: event=search-done
-               ├── streamText + submitQuestions tool
-               │     ├── SSE: event=question (one per question)
-               │     ├── SSE: event=question
-               │     └── ...
-               └── SSE: event=done
+               ├── loadContent(topicId) → quiz-content.json
+               ├── SSE: data-task (search done)
+               ├── streamText → LLM generates JSON
+               ├── Parse JSON → validate with quizResponseSchema
+               ├── SSE: data-question (all at once)
+               └── SSE: [DONE]
                │
                ▼
          useQuizAI parses SSE stream
                │
-               ├── search-done → phase="generating", matchCount=N
-               ├── question → append to questions[]
-               └── done → phase="done"
+               ├── data-task done → phase="generating", matchCount=N
+               ├── data-question → append to questions[]
+               └── [DONE] → phase="done"
                │
                ▼
          useQuizAI.questions updates
@@ -52,7 +50,7 @@ User clicks topic
          mapQuestionsFromResponse(raw → Question[])
                │
                ▼
-         useQuizFlow → "quiz"  (on first question)
+         useQuizFlow → "quiz"  (all questions ready)
                │
                ▼
            QuizState
@@ -60,7 +58,6 @@ User clicks topic
                ├── QuizTimer (countdown)
                ├── QuizPagination (5 per page)
                ├── QuizQuestion (radio group options)
-               ├── "กำลังสร้างคำถามเพิ่มเติม..." banner (while generating)
                └── Submit button
                │
                ├── submitQuiz → "results"
@@ -83,7 +80,7 @@ The user lands on the quiz page (`app/(home)/quiz/page.tsx`). `QuizContents` ren
 |-------|-------------|
 | `id` | Unique topic identifier |
 | `title` | Thai topic name (e.g. "อักขรวิธี") |
-| `keywords` | Pali grammar terms used for vector search |
+| `keywords` | Pali grammar terms used for prompt context |
 | `amount` | Number of questions (15 or 30) |
 | `time` | Time limit in minutes (10 or 15) |
 
@@ -107,33 +104,34 @@ On `startQuiz(topicId)`:
 2. `useQuizFlow.start()` — sets state to `"loading"`
 3. `useQuizUI.reset()` — resets pagination to page 1
 4. `useQuizData.clearAnswers()` — clears previous answers
-5. `useQuizAI.submit({ amount, topics })` — fires SSE request
+5. `useQuizAI.submit({ amount, topics, topicId })` — fires SSE request
 
 ### 3. AI Question Generation (useQuizAI → SSE Stream)
 
-**Client side** — `useQuizAI` (`lib/hooks/use-quiz-ai.ts`) fetches the quiz API via raw `fetch` and reads a Server-Sent Events (SSE) stream:
+**Client side** — `useQuizAI` (`lib/hooks/use-quiz-ai.ts`) fetches the quiz API via `useChat` with `DefaultChatTransport`:
 
-```ts
-// Client sends POST to /api/quiz, reads SSE response
-const response = await fetch("/api/quiz", {
-  method: "POST",
-  body: JSON.stringify({ topics, amount }),
-});
-// Read SSE events: search-done, question, done, error
+The client POSTs a JSON payload to `/api/quiz` inside a chat message:
+```json
+{
+  "messages": [{
+    "role": "user",
+    "parts": [{ "type": "text", "text": "{\"amount\":15,\"topics\":[\"...\"],\"topicId\":\"1\"}" }]
+  }]
+}
 ```
 
-**SSE Event types:**
+**SSE Event types (via `createUIMessageStream`):**
 
 | Event | When | Payload |
 |-------|------|---------|
-| `search-done` | After Pinecone vector search completes | `{ matchCount: number }` |
-| `question` | Each time the model submits a question via tool | `{ question, answer, option1, option2, option3 }` |
-| `done` | All questions generated | `{ total: number }` |
-| `error` | Pipeline or generation failure | `{ message: string }` |
+| `data-status` | Phase transitions | `{ phase: "searching" \| "answering" }` |
+| `data-task` | Content loading status | `{ label: "ค้นหาเอกสาร", status, matchCount }` |
+| `data-question` | Each generated question | `{ id, question, answer, option1, option2, option3 }` |
 
 **API Route** (`app/api/quiz/route.ts`):
-- Parses JSON body with `quizSchema` (Zod)
+- Parses chat message body with `quizSchema` (Zod) including `topicId`
 - Calls `generateQuizStream()` → returns SSE `Response`
+- `maxDuration: 60` seconds
 - Handles errors with Thai messages for quota (429) and generic errors
 
 **Pipeline** (`lib/services/quiz-pipeline.ts`):
@@ -141,76 +139,57 @@ const response = await fetch("/api/quiz", {
 ```
 generateQuizStream(input)
   │
-  ├── generateEmbedding(topics.join(", "))
-  │     Uses Pinecone Inference API (llama-text-embed-v2)
+  ├── loadContent(topicId) → quiz-content.json
+  │     Loads static Pali grammar content for the topic
   │
-  ├── queryPinecone(embedding, topK=10)
-  │     Searches the Pali textbook vector store
+  ├── SSE: data-task (running → done, matchCount=1)
   │
-  ├── formatContext(matches)
-  │     Joins matched text with "\n---\n" separators
+  ├── streamText({
+  │       model: llm(getDefaultModel()),
+  │       prompt: buildQuizPrompt(context, amount, topics)
+  │     })
+  │     │
+  │     └── await result.text
+  │           │
+  │           ├── JSON.parse → validate with quizResponseSchema
+  │           └── SSE: data-question × N
   │
-  ├── SSE: event=search-done { matchCount }
-  │
-  └── streamText({
-        model: llm(getDefaultModel()),
-        system: "You are a quiz generator...",
-        messages: [{ role: "user", content: "Generate N questions..." }],
-        tools: {
-          submitQuestions: tool({
-            inputSchema: z.object({
-              questions: z.array(z.object({
-                question: z.string(),
-                answer: z.string(),
-                option1: z.string(),
-                option2: z.string(),
-                option3: z.string(),
-              }))
-            }),
-            execute: ({ questions }) => {
-              for (const q of questions) sendSSE("question", q);
-              return { submitted, remaining };
-            }
-          })
-        },
-        stopWhen: stepCountIs(15),
-      })
+  └── Stream closes
 ```
 
 **Key design decisions:**
-- Uses `streamText` + `submitQuestions` tool instead of `streamObject` — this allows **true streaming**: each question is emitted immediately via SSE when the model calls the tool, rather than waiting for the entire JSON response
-- The model calls `submitQuestions` in batches (1-5 questions per call), each batch writes `question` SSE events
-- `stopWhen: stepCountIs(15)` allows up to 15 tool-calling steps to accommodate models that call tools multiple times
+- Uses `streamText` to generate raw JSON text (no structured output mode, no tools) — works reliably across all OpenAI-compatible providers without requiring `response_format: json_object` support
+- Content source is `data/quiz-content.json` — static curated Pali grammar text for each topic, eliminating Pinecone dependency and latency
+- All questions are generated in a single LLM call — no multi-step tool-calling loop
+- After the LLM completes, the JSON is parsed and all questions are written to the SSE stream at once
 
-### 4. Progressive Question Display
+### 4. Loading Phase Display
 
-As SSE `question` events arrive, the client works in real-time:
+During the `"loading"` app state, `QuizContents` renders:
 
-1. `useQuizAI` appends each question to `questions[]` state
-2. `mapQuestionsFromResponse` transforms raw questions to `Question[]` format (with shuffled options)
-3. On the **first** question received, `useQuizFlow` transitions from `loading` to `quiz`
-4. Subsequent questions update the `Question[]` array in-place — the quiz UI shows more questions as they arrive
-5. A `"กำลังสร้างคำถามเพิ่มเติม..."` banner appears below the progress bar while `isGenerating` is true
-6. When `done` event arrives, `isGenerating` becomes false, banner disappears
+```tsx
+<div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+  <QuizProcess messages={messages} ... mode="full" />
+  <QuizStatus phase={phase} />
+</div>
+```
 
-**Loading phases:**
+The phase indicator (`components/ai/quiz-status.tsx`) shows:
 
-| Phase | App State | UI |
-|-------|-----------|-----|
-| Searching | `loading` | QuizProcess: inline `ProcessStepsInline` rail with "กำลังค้นหาเอกสาร..." task + "Reasoning" card |
-| Generating | `loading` | Same rail, task transitions to "เสร็จสิ้น · พบ N รายการ" + "Reasoning" card with excerpts |
-| First question | `quiz` | `QuizState` appears with first question + "กำลังสร้างคำถามเพิ่มเติม..."; the inline rail collapses, leaving a `ProcessBadge` at the top of the card |
-| Stream in progress | `quiz` | Questions appear one by one; badge remains visible, clickable to expand the excerpts |
-| Done | `quiz` | All questions visible, rail is gone, badge stays |
+| Phase | Icon | Label |
+|-------|------|-------|
+| `searching` | `Search` + spinner | "กำลังค้นหาเนื้อหา..." |
+| `generating` | `FileQuestion` + spinner | "กำลังสร้างคำถาม..." |
+
+When all questions arrive, the app transitions from `"loading"` to `"quiz"`.
 
 ### 5. Question Mapping
 
 `mapQuestionsFromResponse` (`helpers/map-questions.ts`) transforms each raw question:
-- Creates `id` from `questionText + index`
-- Shuffles the 4 options randomly
-- Creates option `id` from `text + questionText`
-- Sets `answerId` as the correct answer's computed id
-- Filters out entries with missing `question` or `answer` fields
+- Uses `question.id` from the stream (e.g., `q-2`) as the question ID
+- Shuffles the 4 options randomly using Fisher-Yates shuffle
+- Creates deterministic option IDs (`{qId}-opt-{index}`)
+- Computes `answerId` to match the correct option's ID after shuffle
 
 ### 6. Quiz State (QuizState)
 
@@ -220,7 +199,6 @@ As SSE `question` events arrive, the client works in real-time:
 |-----------|---------|
 | `QuizTimer` | Countdown timer; calls `onTimeUp` when expired |
 | Progress bar | Shows answered count vs total |
-| Generating banner | `"กำลังสร้างคำถามเพิ่มเติม..."` while questions are still being streamed |
 | `QuizQuestion` × 5 | Current page of questions with radio options |
 | `QuizPagination` | Previous/next page navigation + page buttons |
 | Submit button | Enabled only when all questions answered or time expired |
@@ -237,7 +215,7 @@ As SSE `question` events arrive, the client works in real-time:
 
 `useQuizData.answer(questionId, optionId)` updates the answers map:
 ```ts
-answers = { "q1": "TruthWhat is sacca?", "q2": "time-expired", ... }
+answers = { "q-2": "q-2-opt-1", "q-3": "time-expired", ... }
 ```
 
 `useQuizStats` computes live stats via `getStats()` (`helpers/get-stats.ts`):
@@ -287,23 +265,25 @@ flow.goToResults();
 | `app/(home)/quiz/layout.tsx` | Layout wrapper |
 | `app/(home)/quiz/components/QuizContents.tsx` | Client component, state router |
 | `app/(home)/quiz/states/HomeState.tsx` | Topic selection grid |
-| `app/(home)/quiz/states/QuizState.tsx` | Active quiz UI (with generating banner) |
+| `app/(home)/quiz/states/QuizState.tsx` | Active quiz UI |
 | `app/(home)/quiz/states/ResultState.tsx` | Results and review |
 | `app/(home)/quiz/components/QuizTimer.tsx` | Countdown timer |
 | `app/(home)/quiz/components/QuizQuestont.tsx` | Question + options display |
 | `app/(home)/quiz/components/QuizPagination.tsx` | Page navigation |
-| `app/(home)/quiz/components/QuizProcess.tsx` | Loading orchestrator: composes `ProcessStepsInline` + `ProcessBadge` + `ProcessDetails` (mode="full" for loading, mode="badge-only" for persistent badge) |
+| `app/(home)/quiz/components/QuizProcess.tsx` | Loading orchestrator (search task + reasoning display) |
 | `app/(home)/quiz/components/Disclaimer.tsx` | Disclaimer footer |
+| `components/ai/quiz-status.tsx` | Phase status indicator (searching → generating) |
 | `hooks/use-quiz.ts` | Orchestrator hook |
 | `lib/hooks/use-quiz-flow.ts` | App state machine |
 | `lib/hooks/use-quiz-data.ts` | Quiz data state |
 | `lib/hooks/use-quiz-ui.ts` | UI state (page, completed, expired) |
-| `lib/hooks/use-quiz-ai.ts` | SSE stream reader — replaces `useObject` |
+| `lib/hooks/use-quiz-ai.ts` | SSE stream reader + phase derivation |
 | `lib/hooks/use-quiz-stats.ts` | Live scoring/progress computation |
-| `lib/services/quiz-pipeline.ts` | RAG pipeline + `streamText` + `submitQuestions` tool |
+| `lib/services/quiz-pipeline.ts` | Content loading + `streamText` + JSON parse |
 | `lib/schemas/quiz.ts` | Zod schemas (`quizSchema`, `quizResponseSchema`) |
 | `app/api/quiz/route.ts` | API route (SSE response + error handling) |
 | `data/quiz-topic.tsx` | Topic definitions with keywords |
+| `data/quiz-content.json` | Curated Pali grammar content per topic |
 | `helpers/map-questions.ts` | Raw → `Question[]` transformation |
 | `helpers/get-stats.ts` | Score and progress computation |
 
@@ -312,38 +292,29 @@ flow.goToResults();
 | State | Component | Description |
 |-------|-----------|-------------|
 | `home` | `HomeState` | Topic selection grid |
-| `loading` | `QuizProcess` (mode="full") | Inline process steps rail showing searching → generating, with a `ProcessBadge` for the reasoning excerpts |
-| `quiz` | `QuizState` | Questions (appear progressively), timer, pagination, generating banner |
+| `loading` | `QuizProcess` + `QuizStatus` | Phase indicator shows "กำลังค้นหาเนื้อหา..." → "กำลังสร้างคำถาม..." |
+| `quiz` | `QuizState` | All questions loaded, timer, pagination |
 | `results` | `ResultState` | Score and answer review |
 
 ## Streaming Events
 
 | SSE Event | Direction | Payload |
 |-----------|-----------|---------|
-| `search-done` | Server → Client | `{ matchCount: number }` |
-| `question` | Server → Client | `{ question, answer, option1, option2, option3 }` |
-| `done` | Server → Client | `{ total: number }` |
-| `error` | Server → Client | `{ message: string }` |
+| `data-task` | Server → Client | `{ label: "ค้นหาเอกสาร", status: "running" \| "done", matchCount }` |
+| `data-question` | Server → Client | `{ id, question, answer, option1, option2, option3 }` |
+| `data-status` | Server → Client | `{ phase: "searching" \| "answering" }` |
 
 ## Environment Variables
 
 | Variable | Used By |
 |----------|---------|
-| `PINECONE_API_KEY` | Vector store query for context retrieval |
-| `PINECONE_INDEX_NAME` | Pinecone index |
-| `PINECONE_NAMESPACE` | Pinecone namespace |
 | `PROVIDER_NAME` | LLM provider selection (`openrouter` or `opencode`, default: `openrouter`) |
 | `OPENROUTER_API_KEY` / `OPENAI_API_KEY` | OpenRouter provider API key |
 | `OPENROUTER_LLM_MODEL` / `LLM_MODEL` | Model for OpenRouter (default: `google/gemma-3-27b-it:free`) |
 | `OPENCODE_API_KEY` | OpenCode provider API key |
 | `OPENCODE_LLM_MODEL` | Model for OpenCode (default: `deepseek-v4-flash`) |
 
-## Models
-
-| Model | Provider | Used For |
-|-------|----------|----------|
-| `llama-text-embed-v2` | Pinecone Inference | Embedding topics for vector search |
-| Configurable via `PROVIDER_NAME` | OpenRouter/OpenCode | Generating quiz questions via `streamText` + tools |
+> Quiz generation no longer requires Pinecone. Context is sourced from `data/quiz-content.json`.
 
 ## LLM Provider Configuration
 
@@ -353,4 +324,3 @@ The quiz uses `llm(getDefaultModel())` from `lib/services/llm-provider.ts`, whic
 |----------|-----------------|----------|--------------|
 | OpenRouter | `openrouter` (default) | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY`, `OPENROUTER_LLM_MODEL` |
 | OpenCode | `opencode` | `https://opencode.ai/zen/go/v1` | `OPENCODE_API_KEY`, `OPENCODE_LLM_MODEL` |
-

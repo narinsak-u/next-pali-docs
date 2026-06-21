@@ -25,7 +25,10 @@ interface UseQuizReturn {
   matchCount: number;
   messages: UIMessage[];
   status: string;
+  phase: "idle" | "searching" | "generating" | "done" | "error";
   isGenerating: boolean;
+  renderedCount: number;
+  totalExpected: number;
   allQuestionsAnswered: boolean;
   answeredQuestionsCount: number;
   progressPercentage: number;
@@ -64,6 +67,7 @@ export function useQuiz(): UseQuizReturn {
       ai.submit({
         amount: topic.amount,
         topics: topic.keywords,
+        topicId: topic.id,
       });
     },
     [ai, data, flow, ui],
@@ -106,6 +110,12 @@ export function useQuiz(): UseQuizReturn {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [flow, ui]);
 
+  const selectedTopicData = quizTopicsById.get(data.selectedTopic ?? "");
+  const totalExpected = selectedTopicData?.amount ?? 0;
+  const isGenerating =
+    ai.status === "streaming" && ai.questions.length < totalExpected;
+  const renderedCount = ai.questions.length;
+
   const restartQuiz = useCallback(() => {
     flow.goToHome();
     data.setTopic(null);
@@ -146,7 +156,10 @@ export function useQuiz(): UseQuizReturn {
     matchCount: ai.matchCount,
     messages: ai.messages,
     status: ai.status,
-    isGenerating: ai.phase === "generating",
+  phase: ai.phase,
+  isGenerating,
+  renderedCount,
+  totalExpected,
     allQuestionsAnswered: stats.allQuestionsAnswered,
     answeredQuestionsCount: stats.answeredQuestionsCount,
     progressPercentage: stats.progressPercentage,

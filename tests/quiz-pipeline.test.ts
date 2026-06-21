@@ -1,39 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const captured = vi.hoisted(() => ({
-  submitQuestions: null as { execute: (...args: unknown[]) => Promise<unknown> } | null,
-  stopWhen: null as unknown,
-}));
-
 vi.mock("ai", () => ({
-  streamText: vi.fn((opts) => {
-    captured.stopWhen = opts.stopWhen;
-    captured.submitQuestions = opts.tools?.submitQuestions ?? null;
-    return {
-      toUIMessageStream: vi.fn(
-        () =>
-          new ReadableStream({
-            start(controller) {
-              controller.enqueue({ type: "finish", finishReason: "stop" });
-              controller.close();
-            },
-          }),
-      ),
-      consumeStream: vi.fn(async () => {
-        if (captured.submitQuestions?.execute) {
-          await captured.submitQuestions.execute(
-            {
-              questions: [
-                { question: "Q1", answer: "A1", option1: "x", option2: "y", option3: "z" },
-              ],
-            },
-            { toolCallId: "tc-1" },
-          );
-        }
+  streamText: vi.fn(() => ({
+    text: Promise.resolve(
+      JSON.stringify({
+        questions: [
+          { question: "Q1", answer: "A1", option1: "x", option2: "y", option3: "z" },
+        ],
       }),
-      text: Promise.resolve(""),
-    };
-  }),
+    ),
+  })),
   createUIMessageStream: vi.fn((opts) => {
     const writes: Array<Record<string, unknown>> = [];
     const writer = {
@@ -45,25 +21,15 @@ vi.mock("ai", () => ({
       body: { writer },
     }));
   }),
-  tool: vi.fn((opts) => opts),
-  stepCountIs: vi.fn(() => vi.fn()),
 }));
 
-vi.mock("@/lib/pinecone", () => ({
-  pc: { inference: { embed: vi.fn() } },
-  index: { namespace: vi.fn(() => ({ query: vi.fn() })) },
-}));
-
-vi.mock("@/lib/services/embedding", () => ({
-  generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2]),
-}));
-
-vi.mock("@/lib/services/vector-store", () => ({
-  queryPinecone: vi.fn().mockResolvedValue([
-    { id: "a", score: 0.9, text: "passage A" },
-    { id: "b", score: 0.8, text: "passage B" },
-  ]),
-  formatContext: vi.fn().mockReturnValue("MOCK CTX"),
+vi.mock("@/data/quiz-content.json", () => ({
+  default: {
+    "1": {
+      title: "Test",
+      content: "Mock content for topic 1",
+    },
+  },
 }));
 
 vi.mock("@/lib/services/llm-provider", () => ({
@@ -82,10 +48,11 @@ beforeEach(() => {
 });
 
 describe("generateQuizStream (UIMessageStream)", () => {
-  it("emits searching → task running/done → reasoning → answering → question", async () => {
+  it("emits searching → task → answering → question with topicId", async () => {
     const result = (await generateQuizStream({
       topics: ["x"],
       amount: 1,
+      topicId: "1",
     })) as unknown as { body: { writer: WriterMock } };
 
     const writes = result.body.writer.writes;
@@ -95,7 +62,6 @@ describe("generateQuizStream (UIMessageStream)", () => {
       "data-status",
       "data-task",
       "data-task",
-      "data-reasoning",
       "data-status",
       "data-question",
     ]);
@@ -109,48 +75,33 @@ describe("generateQuizStream (UIMessageStream)", () => {
 
     const taskDone = writes[2] as { data: { status: string; matchCount: number } };
     expect(taskDone.data.status).toBe("done");
-    expect(taskDone.data.matchCount).toBe(2);
+    expect(taskDone.data.matchCount).toBe(1);
 
-    const reasoning = writes[3] as { data: { summary: string; excerpts: string[] } };
-    expect(reasoning.data.summary).toMatch(/2 รายการ/);
-    expect(reasoning.data.excerpts).toHaveLength(2);
-
-    const status2 = writes[4] as { data: { phase: string } };
+    const status2 = writes[3] as { data: { phase: string } };
     expect(status2.data.phase).toBe("answering");
 
-    const question = writes[5] as { data: { question: string } };
+    const question = writes[4] as { data: { question: string } };
     expect(question.data.question).toBe("Q1");
   });
 
-  it("emits a data-task error then continues with empty context when queryPinecone throws", async () => {
-    const { queryPinecone } = await import("@/lib/services/vector-store");
-    vi.mocked(queryPinecone).mockRejectedValueOnce(new Error("pinecone down"));
-
+  it("works without topicId (empty context)", async () => {
     const result = (await generateQuizStream({
       topics: ["x"],
       amount: 1,
     })) as unknown as { body: { writer: WriterMock } };
 
     const writes = result.body.writer.writes;
-    const errorTask = writes.find(
-      (w) =>
-        w.type === "data-task" &&
-        (w.data as { status: string }).status === "error",
-    );
-    expect(errorTask).toBeDefined();
-    expect((errorTask!.data as { message: string }).message).toBe(
-      "pinecone down",
-    );
+    const types = writes.map((w) => w.type);
 
-    const doneTask = writes.find(
-      (w) =>
-        w.type === "data-task" &&
-        (w.data as { status: string; matchCount: number }).status === "done",
-    );
-    expect(doneTask).toBeDefined();
-    expect((doneTask!.data as { matchCount: number }).matchCount).toBe(0);
+    expect(types).toEqual([
+      "data-status",
+      "data-task",
+      "data-task",
+      "data-status",
+      "data-question",
+    ]);
 
-    const reasoning = writes.find((w) => w.type === "data-reasoning");
-    expect(reasoning).toBeDefined();
+    const taskDone = writes[2] as { data: { matchCount: number } };
+    expect(taskDone.data.matchCount).toBe(0);
   });
 });

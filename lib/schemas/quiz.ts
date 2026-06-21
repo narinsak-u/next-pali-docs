@@ -13,6 +13,7 @@ export interface Question {
 export const quizSchema = z.object({
   topics: z.array(z.string()),
   amount: z.number(),
+  topicId: z.string().optional(),
 });
 
 export const quizResponseSchema = z.object({

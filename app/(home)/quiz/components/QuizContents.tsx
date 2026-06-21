@@ -6,6 +6,7 @@ import QuizState from "../states/QuizState";
 import ResultState from "../states/ResultState";
 import Disclaimer from "./Disclaimer";
 import { QuizProcess } from "./QuizProcess";
+import { QuizStatus } from "@/components/ai/quiz-status";
 import { notFound } from "next/navigation";
 
 function getErrorMessage(err: Error | null): string | null {
@@ -38,6 +39,7 @@ export default function QuizContents() {
     matchCount,
     messages,
     status,
+    phase,
     isGenerating,
     startQuiz,
     selectOption,
@@ -59,14 +61,17 @@ export default function QuizContents() {
 
   if (appState === "loading") {
     return (
-      <QuizProcess
-        messages={messages}
-        isStreaming={status === "streaming" || status === "submitted"}
-        matchCount={matchCount}
-        error={error ? new Error(getErrorMessage(error) ?? "Unknown error") : null}
-        onRetry={handleRetry}
-        mode="full"
-      />
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <QuizProcess
+          messages={messages}
+          isStreaming={status === "streaming" || status === "submitted"}
+          matchCount={matchCount}
+          error={error ? new Error(getErrorMessage(error) ?? "Unknown error") : null}
+          onRetry={handleRetry}
+          mode="full"
+        />
+        <QuizStatus phase={phase} />
+      </div>
     );
   }
 
@@ -87,7 +92,6 @@ export default function QuizContents() {
           allQuestionsAnswered={allQuestionsAnswered}
           answeredQuestionsCount={answeredQuestionsCount}
           progressPercentage={progressPercentage}
-          isGenerating={isGenerating}
           quizContext={{ messages, matchCount }}
         />
         <Disclaimer />

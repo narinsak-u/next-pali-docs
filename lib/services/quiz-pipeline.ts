@@ -1,35 +1,57 @@
-import { generateEmbedding } from "./embedding";
-import {
-  queryPinecone,
-  formatContext,
-  type DocumentMatch,
-} from "./vector-store";
 import {
   streamText,
-  tool,
-  stepCountIs,
   createUIMessageStream,
   type InferUIMessageChunk,
   type UIMessage,
 } from "ai";
-import { z } from "zod";
 import { llm, getDefaultModel } from "@/lib/services/llm-provider";
+import { quizResponseSchema } from "@/lib/schemas/quiz";
+import quizContent from "@/data/quiz-content.json";
 
 export interface QuizInput {
   topics: string[];
   amount: number;
+  topicId?: string;
 }
 
-const MAX_STEPS = 20;
-const QUIZ_BASE_SYSTEM =
-  "You are a quiz generator that creates multiple-choice questions based on provided context. Generate questions one at a time using the submitQuestions tool. Call the tool once per batch of questions.";
+const MAX_CONTEXT_CHARS = 1500;
 
-function stopWhenForAmount(amount: number) {
-  return stepCountIs(Math.max(MAX_STEPS, Math.ceil(amount / 2) + 5));
+function buildQuizPrompt(
+  context: string,
+  amount: number,
+  topics: string[],
+): string {
+  return [
+    "You are a quiz generator that creates multiple-choice questions based on provided context.",
+    "You must output valid JSON only — no markdown, no explanation.",
+    "",
+    `Context from Pali textbook corpus:`,
+    context,
+    "",
+    `Generate exactly ${amount} multiple-choice questions about ${topics.join(", ")}.`,
+    "Base all questions on the provided context.",
+    "Translate all questions, answers, and options to Thai.",
+    "",
+    `Output a JSON object with a "questions" array. Each question must have these fields:`,
+    `  "question": "the question text",`,
+    `  "answer": "correct answer (max 15 words)",`,
+    `  "option1": "wrong option 1 (max 15 words)",`,
+    `  "option2": "wrong option 2 (max 15 words)",`,
+    `  "option3": "wrong option 3 (max 15 words)"`,
+    "",
+    "Example:",
+    `{"questions":[{"question":"...","answer":"...","option1":"...","option2":"...","option3":"..."}]}`,
+  ].join("\n");
 }
 
-function buildSystemWithContext(baseSystem: string, context: string): string {
-  return `${baseSystem}\n\nContext from Pali textbook corpus:\n${context}\n\nUse this context to generate the questions. Do not search again — you already have the necessary information.`;
+function loadContent(topicId?: string): string {
+  if (topicId) {
+    const entry = (
+      quizContent as Record<string, { title: string; content: string }>
+    )[topicId];
+    if (entry) return entry.content;
+  }
+  return "";
 }
 
 export function generateQuizStream(
@@ -39,136 +61,76 @@ export function generateQuizStream(
     execute: async ({ writer }) => {
       let idCounter = 0;
       const nextId = (prefix: string) => `${prefix}-${++idCounter}`;
-      const searchToolCallId = nextId("search");
 
+      // 1. Signal client that content loading has started
       writer.write({
         type: "data-status",
         data: { phase: "searching" },
       });
 
+      // 2. Load static content for the selected topic from quiz-content.json
+      const content = loadContent(input.topicId);
+
+      // 3. Emit search task lifecycle (running → done) to update the QuizProcess UI
       writer.write({
         type: "data-task",
         data: {
-          id: searchToolCallId,
+          id: nextId("search"),
           label: "ค้นหาเอกสาร",
           status: "running",
           query: input.topics.join(", "),
         },
       });
-
-      let matches: DocumentMatch[] = [];
-      try {
-        const embedding = await generateEmbedding(input.topics.join(", "));
-        matches = await queryPinecone(embedding, 10);
-      } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : "search failed";
-        writer.write({
-          type: "data-task",
-          data: {
-            id: searchToolCallId,
-            label: "ค้นหาเอกสาร",
-            status: "error",
-            message,
-          },
-        });
-        matches = [];
-      }
-
       writer.write({
         type: "data-task",
         data: {
-          id: searchToolCallId,
+          id: nextId("search"),
           label: "ค้นหาเอกสาร",
           status: "done",
-          matchCount: matches.length,
-        },
-      });
-      const excerpts = matches
-        .slice(0, 10)
-        .map((m) => m.text.slice(0, 120).trim());
-      writer.write({
-        type: "data-reasoning",
-        data: {
-          summary: `พบเอกสารที่เกี่ยวข้อง ${matches.length} รายการ`,
-          excerpts,
+          matchCount: content ? 1 : 0,
         },
       });
 
+      // 4. Truncate context if it exceeds the limit to keep prompt size manageable
+      let context = content;
+      if (context.length > MAX_CONTEXT_CHARS) {
+        context =
+          context.slice(0, MAX_CONTEXT_CHARS) +
+          "\n\n[เนื้อหาถูกตัดเนื่องจากความยาว...]";
+      }
+
+      // 5. Signal phase transition to "answering" — QuizStatus shows "กำลังสร้างคำถาม..."
       writer.write({
         type: "data-status",
         data: { phase: "answering" },
       });
 
-      const context = formatContext(matches);
+      // 6. Build the LLM prompt with context + instructions, then call streamText
+      //    The model returns a JSON string matching quizResponseSchema
+      const prompt = buildQuizPrompt(context, input.amount, input.topics);
 
       const result = streamText({
         model: llm(getDefaultModel()),
-        system: QUIZ_BASE_SYSTEM,
-        messages: [
-          {
-            role: "user",
-            content: [
-              `Generate ${input.amount} multiple-choice questions about ${input.topics.join(", ")}.`,
-              "The questions must be based on the provided context.",
-              "Each question should test understanding of key concepts.",
-              "Make sure each question and its options are directly related to the content.",
-              "Translate all questions, answers, and options to Thai language.",
-              "",
-              "Submit questions in batches using the submitQuestions tool. Each question must have these exact fields:",
-              "  question: the question text",
-              "  answer: the correct answer (max 15 words)",
-              "  option1: wrong option 1 (max 15 words)",
-              "  option2: wrong option 2 (max 15 words)",
-              "  option3: wrong option 3 (max 15 words)",
-            ].join("\n"),
-          },
-        ],
-        tools: {
-          submitQuestions: tool({
-            description: "Submit one or more quiz questions",
-            inputSchema: z.object({
-              questions: z
-                .array(
-                  z.object({
-                    question: z.string(),
-                    answer: z.string(),
-                    option1: z.string(),
-                    option2: z.string(),
-                    option3: z.string(),
-                  }),
-                )
-                .min(1)
-                .describe("Array of quiz questions to submit"),
-            }),
-            execute: async ({ questions }) => {
-              questions.forEach((q) => {
-                writer.write({
-                  type: "data-question",
-                  data: {
-                    id: nextId("q"),
-                    question: q.question,
-                    answer: q.answer,
-                    option1: q.option1,
-                    option2: q.option2,
-                    option3: q.option3,
-                  },
-                });
-              });
-              return { submitted: questions.length };
-            },
-          }),
-        },
-        prepareStep: async ({ steps }) => {
-          if (steps.length === 0) return undefined;
-          return {
-            system: buildSystemWithContext(QUIZ_BASE_SYSTEM, context),
-          };
-        },
-        stopWhen: stopWhenForAmount(input.amount),
+        prompt,
       });
 
-      writer.merge(result.toUIMessageStream({ sendReasoning: false }));
-      await result.consumeStream();
+      // 7. Parse the LLM's JSON response and validate against the schema
+      const parsed = quizResponseSchema.parse(JSON.parse(await result.text));
+
+      // 8. Write each validated question to the SSE stream as a data-question event
+      for (const q of parsed.questions) {
+        writer.write({
+          type: "data-question",
+          data: {
+            id: nextId("q"),
+            question: q.question,
+            answer: q.answer,
+            option1: q.option1,
+            option2: q.option2,
+            option3: q.option3,
+          },
+        });
+      }
     },
   });
 }

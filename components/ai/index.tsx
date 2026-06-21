@@ -9,6 +9,7 @@ export { ProcessBadge } from "./process-badge";
 export { ProcessDetails } from "./process-details";
 export { ProcessStepsInline } from "./process-steps-inline";
 export { ChatStatus } from "./chat-status";
+export { QuizStatus } from "./quiz-status";
 export { ChatInput } from "./chat-input";
 export { useAIChat } from "@/hooks/use-ai-chat";
 export type { StepDescriptor, StepKind, StepStatus } from "./step-descriptor";

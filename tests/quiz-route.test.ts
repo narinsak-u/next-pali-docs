@@ -32,7 +32,24 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-function makeReq(body: unknown): Request {
+function makeChatReq(payload: object): Request {
+  return new Request("http://localhost/api/quiz", {
+    method: "POST",
+    body: JSON.stringify({
+      id: "test-id",
+      messages: [
+        {
+          parts: [{ type: "text", text: JSON.stringify(payload) }],
+          id: "msg-1",
+          role: "user",
+        },
+      ],
+      trigger: "submit-message",
+    }),
+  });
+}
+
+function makeRawReq(body: unknown): Request {
   return new Request("http://localhost/api/quiz", {
     method: "POST",
     body: JSON.stringify(body),
@@ -44,7 +61,7 @@ describe("POST /api/quiz", () => {
     const fakeStream = { id: "ui-stream" } as never;
     mockedStream.mockReturnValue(fakeStream);
 
-    const response = await POST(makeReq({ topics: ["anatta"], amount: 3 }));
+    const response = await POST(makeChatReq({ topics: ["anatta"], amount: 3 }));
 
     expect(response.status).toBe(200);
     expect(mockedStream).toHaveBeenCalledWith({ topics: ["anatta"], amount: 3 });
@@ -52,7 +69,7 @@ describe("POST /api/quiz", () => {
   });
 
   it("returns 500 for invalid input", async () => {
-    const response = await POST(makeReq({ topics: "not-an-array" }));
+    const response = await POST(makeRawReq({ topics: "not-an-array" }));
     expect(response.status).toBe(500);
   });
 });
