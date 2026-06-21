@@ -2,6 +2,7 @@ import { generateQuizStream } from "@/lib/services/quiz-pipeline";
 import { quizSchema } from "@/lib/schemas/quiz";
 import { NextResponse } from "next/server";
 
+export const runtime = "edge";
 export const maxDuration = 30;
 
 export async function POST(req: Request) {

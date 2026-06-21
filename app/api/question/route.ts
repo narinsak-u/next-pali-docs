@@ -12,7 +12,7 @@ import { llm, getDefaultModel } from "@/lib/services/llm-provider";
 import { PALI_EXPERT_SYSTEM_PROMPT } from "@/lib/chat/pali-system-prompt";
 import { formatContext, type DocumentMatch } from "@/lib/services/vector-store";
 
-export const runtime = "nodejs";
+export const runtime = "edge";
 export const maxDuration = 120;
 
 // Append retrieved textbook context to the system prompt for grounded answers
