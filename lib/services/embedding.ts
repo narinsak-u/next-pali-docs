@@ -1,5 +1,5 @@
 import { LRUCache } from "lru-cache";
-import { getPinecone } from "@/lib/pinecone";
+import { pc } from "@/lib/pinecone";
 
 const MODEL = "llama-text-embed-v2";
 const CACHE_LIMIT = 100;
@@ -14,7 +14,6 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   const cached = embeddingCache.get(text);
   if (cached) return cached;
 
-  const pc = await getPinecone();
   const result = await pc.inference.embed(MODEL, [text], {
     inputType: "passage",
     truncate: "END",
@@ -36,7 +35,6 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
   });
 
   if (missingTexts.length > 0) {
-    const pc = await getPinecone();
     const response = await pc.inference.embed(MODEL, missingTexts, {
       inputType: "passage",
       truncate: "END",

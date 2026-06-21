@@ -1,18 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/pinecone", () => ({
-  getPinecone: vi.fn(),
+  pc: { inference: { embed: vi.fn() } },
 }));
 
 import { generateEmbedding, generateEmbeddings } from "@/lib/services/embedding";
-import { getPinecone } from "@/lib/pinecone";
+import { pc } from "@/lib/pinecone";
 
-const mockedGetPinecone = vi.mocked(getPinecone);
-const mockedEmbed = vi.fn();
+const mockedEmbed = vi.mocked(pc.inference.embed);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedGetPinecone.mockResolvedValue({ inference: { embed: mockedEmbed } } as never);
 });
 
 describe("generateEmbedding", () => {

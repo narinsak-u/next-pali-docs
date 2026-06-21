@@ -1,4 +1,4 @@
-import { getIndex } from "@/lib/pinecone";
+import { index } from "@/lib/pinecone";
 
 export interface DocumentMatch {
   id: string;
@@ -12,7 +12,6 @@ export async function queryPinecone(
   embedding: number[],
   topK: number = 10
 ): Promise<DocumentMatch[]> {
-  const index = await getIndex();
   const results = await index.namespace(namespace).query({
     vector: embedding,
     topK,

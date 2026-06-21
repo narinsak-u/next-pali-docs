@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const mockedNamespace = vi.hoisted(() => vi.fn());
+const mockedIndex = vi.hoisted(() => ({ namespace: mockedNamespace }));
+
 vi.mock("@/lib/pinecone", () => ({
-  getIndex: vi.fn(),
+  index: mockedIndex,
 }));
 
 import { queryPinecone, formatContext, type DocumentMatch } from "@/lib/services/vector-store";
-import { getIndex } from "@/lib/pinecone";
-
-const mockedGetIndex = vi.mocked(getIndex);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -37,13 +37,11 @@ describe("formatContext", () => {
 describe("queryPinecone", () => {
   it("returns empty array when no matches returned", async () => {
     const mockQuery = vi.fn().mockResolvedValue({ matches: [] });
-    const mockNamespace = vi.fn().mockReturnValue({ query: mockQuery });
-    mockedGetIndex.mockResolvedValue({ namespace: mockNamespace } as never);
+    mockedNamespace.mockReturnValue({ query: mockQuery });
 
     const result = await queryPinecone([0.1, 0.2], 5);
 
-    expect(mockedGetIndex).toHaveBeenCalledTimes(1);
-    expect(mockNamespace).toHaveBeenCalledWith("");
+    expect(mockedNamespace).toHaveBeenCalledWith("");
     expect(mockQuery).toHaveBeenCalledWith({
       vector: [0.1, 0.2],
       topK: 5,
@@ -60,8 +58,7 @@ describe("queryPinecone", () => {
         { id: "c", score: 0.0, metadata: { text: "" } },
       ],
     });
-    const mockNamespace = vi.fn().mockReturnValue({ query: mockQuery });
-    mockedGetIndex.mockResolvedValue({ namespace: mockNamespace } as never);
+    mockedNamespace.mockReturnValue({ query: mockQuery });
 
     const result = await queryPinecone([0.1], 3);
 
@@ -78,8 +75,7 @@ describe("queryPinecone", () => {
         { id: "a", metadata: null },
       ],
     });
-    const mockNamespace = vi.fn().mockReturnValue({ query: mockQuery });
-    mockedGetIndex.mockResolvedValue({ namespace: mockNamespace } as never);
+    mockedNamespace.mockReturnValue({ query: mockQuery });
 
     const result = await queryPinecone([0.1], 5);
 

@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+vi.mock("@/lib/pinecone", () => ({
+  pc: { inference: { embed: vi.fn() } },
+  index: { namespace: vi.fn(() => ({ query: vi.fn() })) },
+}));
+
 vi.mock("@/lib/services/quiz-pipeline", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/services/quiz-pipeline")>();
   return {
