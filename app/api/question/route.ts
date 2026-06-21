@@ -13,7 +13,7 @@ import { PALI_EXPERT_SYSTEM_PROMPT } from "@/lib/chat/pali-system-prompt";
 import { formatContext, type DocumentMatch } from "@/lib/services/vector-store";
 import { isQuotaError } from "@/lib/services/quiz-pipeline";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 export const maxDuration = 120;
 
 // Append retrieved textbook context to the system prompt for grounded answers
@@ -116,6 +116,7 @@ export async function POST(req: Request) {
                 } catch (e: unknown) {
                   const message =
                     e instanceof Error ? e.message : "search failed";
+                  cachedResult = { matches: [] };
                   writer.write({
                     type: "data-task",
                     data: {

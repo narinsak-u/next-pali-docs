@@ -9,9 +9,9 @@ import { ProcessDetails } from "./process-details";
 import { ProcessStepsInline } from "./process-steps-inline";
 import {
   type ReasoningPart,
-  type TaskPart,
   type SuggestionsPart,
 } from "@/lib/schemas/ai-data-parts";
+import { reduceTaskParts, type DataTaskPart } from "@/lib/chat/reduce-task-parts";
 
 export function AIMessage({
   message,
@@ -29,31 +29,20 @@ export function AIMessage({
     .join("");
 
   const reasoningParts: Array<{ type: "data-reasoning"; data: ReasoningPart }> = [];
-  const taskPartsLatest: Array<{ type: "data-task"; data: TaskPart }> = [];
   const suggestionParts: Array<{ type: "data-suggestions"; data: SuggestionsPart }> = [];
-  const taskById = new Map<string, { type: "data-task"; data: TaskPart }>();
+  const rawTaskParts: DataTaskPart[] = [];
 
   for (const p of parts) {
     if (p.type === "data-reasoning") {
       reasoningParts.push(p as { type: "data-reasoning"; data: ReasoningPart });
     } else if (p.type === "data-task") {
-      const data = (p as { type: "data-task"; data: TaskPart }).data;
-      if (data.id) {
-        const existing = taskById.get(data.id);
-        if (existing) {
-          existing.data = { ...existing.data, status: data.status };
-        } else {
-          const fresh = p as { type: "data-task"; data: TaskPart };
-          taskById.set(data.id, fresh);
-          taskPartsLatest.push(fresh);
-        }
-      } else {
-        taskPartsLatest.push(p as { type: "data-task"; data: TaskPart });
-      }
+      rawTaskParts.push(p as DataTaskPart);
     } else if (p.type === "data-suggestions") {
       suggestionParts.push(p as { type: "data-suggestions"; data: SuggestionsPart });
     }
   }
+
+  const taskPartsLatest: DataTaskPart[] = reduceTaskParts(rawTaskParts);
 
   const processSteps: StepDescriptor[] = [
     ...reasoningParts.map((_, i) => ({

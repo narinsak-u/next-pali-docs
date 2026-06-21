@@ -83,3 +83,54 @@ describe("ai-data-parts", () => {
     ).toThrow();
   });
 });
+
+describe("reduceTaskParts", () => {
+  it("dedupes parts with the same id, keeping the latest status", async () => {
+    const { reduceTaskParts } = await import("@/lib/chat/reduce-task-parts");
+    const parts = [
+      { type: "data-task" as const, data: { id: "tc-1", label: "ค้นหาเอกสาร", status: "running" as const, query: "q" } },
+      { type: "data-task" as const, data: { id: "tc-1", label: "ค้นหาเอกสาร", status: "done" as const, matchCount: 3 } },
+    ];
+    const result = reduceTaskParts(parts);
+    expect(result).toHaveLength(1);
+    expect(result[0].data.status).toBe("done");
+    expect(result[0].data.matchCount).toBe(3);
+  });
+
+  it("dedupes parts with the same label but no id, keeping the latest", async () => {
+    const { reduceTaskParts } = await import("@/lib/chat/reduce-task-parts");
+    const parts = [
+      { type: "data-task" as const, data: { label: "ค้นหาเอกสาร", status: "running" as const, query: "q1" } },
+      { type: "data-task" as const, data: { label: "ค้นหาเอกสาร", status: "error" as const, message: "boom" } },
+    ];
+    const result = reduceTaskParts(parts);
+    expect(result).toHaveLength(1);
+    expect(result[0].data.status).toBe("error");
+    expect(result[0].data.message).toBe("boom");
+  });
+
+  it("keeps separate entries for different ids", async () => {
+    const { reduceTaskParts } = await import("@/lib/chat/reduce-task-parts");
+    const parts = [
+      { type: "data-task" as const, data: { id: "a", label: "A", status: "done" as const } },
+      { type: "data-task" as const, data: { id: "b", label: "B", status: "done" as const } },
+    ];
+    const result = reduceTaskParts(parts);
+    expect(result).toHaveLength(2);
+  });
+
+  it("keeps separate entries for different labels", async () => {
+    const { reduceTaskParts } = await import("@/lib/chat/reduce-task-parts");
+    const parts = [
+      { type: "data-task" as const, data: { label: "A", status: "done" as const } },
+      { type: "data-task" as const, data: { label: "B", status: "done" as const } },
+    ];
+    const result = reduceTaskParts(parts);
+    expect(result).toHaveLength(2);
+  });
+
+  it("returns an empty array for empty input", async () => {
+    const { reduceTaskParts } = await import("@/lib/chat/reduce-task-parts");
+    expect(reduceTaskParts([])).toEqual([]);
+  });
+});
