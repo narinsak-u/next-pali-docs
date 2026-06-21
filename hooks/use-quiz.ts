@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useCallback, useRef } from "react";
+import type { UIMessage } from "ai";
 import { quizTopicsById } from "@/data/quiz-topic";
 import { mapQuestionsFromResponse } from "@/helpers/map-questions";
 import type { Question } from "@/lib/schemas/quiz";
@@ -22,6 +23,8 @@ interface UseQuizReturn {
   isLoading: boolean;
   error: Error | null;
   matchCount: number;
+  messages: UIMessage[];
+  status: string;
   isGenerating: boolean;
   allQuestionsAnswered: boolean;
   answeredQuestionsCount: number;
@@ -141,6 +144,8 @@ export function useQuiz(): UseQuizReturn {
     isLoading: ai.phase === "searching" || ai.phase === "generating",
     error: ai.error,
     matchCount: ai.matchCount,
+    messages: ai.messages,
+    status: ai.status,
     isGenerating: ai.phase === "generating",
     allQuestionsAnswered: stats.allQuestionsAnswered,
     answeredQuestionsCount: stats.answeredQuestionsCount,
