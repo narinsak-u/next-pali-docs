@@ -198,6 +198,35 @@ pre > code * {
   }
 }
 
+/* Custom scrollbar */
+html {
+  scroll-behavior: smooth;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
 nav {
   gap: 0.4rem;
 }
@@ -229,6 +258,132 @@ ul {
 table {
   background-color: transparent;
   border-radius: 3px;
+}
+
+/* AI response markdown styling */
+.ai-response h1,
+.ai-response h2,
+.ai-response h3,
+.ai-response h4 {
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+}
+
+.ai-response h1 { font-size: 1.5em; }
+.ai-response h2 { font-size: 1.25em; }
+.ai-response h3 { font-size: 1.1em; }
+
+.ai-response p {
+  margin-bottom: 0.75em;
+  line-height: 1.75;
+}
+
+.ai-response p:last-child {
+  margin-bottom: 0;
+}
+
+.ai-response ul,
+.ai-response ol {
+  margin: 0.5em 0;
+  padding-inline-start: 1.5em;
+}
+
+.ai-response li {
+  margin-bottom: 0.25em;
+}
+
+.ai-response li > p {
+  margin-bottom: 0.25em;
+}
+
+.ai-response strong {
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+
+.ai-response em {
+  font-style: italic;
+}
+
+.ai-response code {
+  font-family: "Geist Mono", monospace;
+  font-size: 0.875em;
+  font-weight: 500;
+  background: var(--color-muted);
+  padding: 0.15em 0.35em;
+  border-radius: 0.25rem;
+}
+
+.ai-response pre {
+  background: var(--color-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 0.75em 1em;
+  overflow-x: auto;
+  margin: 0.75em 0;
+  font-size: 0.875em;
+  line-height: 1.6;
+}
+
+.ai-response pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+.ai-response blockquote {
+  border-inline-start: 3px solid var(--color-primary);
+  padding-inline-start: 1em;
+  color: var(--color-muted-foreground);
+  margin: 0.75em 0;
+}
+
+.ai-response hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1.25em 0;
+}
+
+.ai-response table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  font-size: 0.9em;
+}
+
+.ai-response thead {
+  border-bottom: 2px solid var(--color-border);
+}
+
+.ai-response th {
+  text-align: start;
+  font-weight: 600;
+  padding: 0.5em 0.75em;
+  background: var(--color-muted);
+}
+
+.ai-response td {
+  padding: 0.5em 0.75em;
+}
+
+.ai-response tbody tr {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ai-response tbody tr:last-child {
+  border-bottom: none;
+}
+
+.ai-response a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ai-response a:hover {
+  opacity: 0.8;
 }
 
 /* DocSearch dark theme override */

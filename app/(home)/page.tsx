@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { MessageCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import ContentNev from "./components/ContentNav";
 import Hero from "./components/Hero";
 import End from "./components/End";
@@ -5,6 +8,20 @@ import Journey from "./components/Journey";
 import Highlights from "./components/Hightlights";
 import Break from "./components/Break";
 import Features from "./components/Features";
+
+const ChatWidget = () => (
+  <div className="fixed bottom-10 right-8 z-50">
+    <Link href="/question">
+      <Button
+        size="icon"
+        className="rounded-full shadow-lg h-12 w-12 hover:scale-110 transition-transform duration-200 bg-primary text-primary-foreground hover:bg-primary/90"
+      >
+        <MessageCircle className="size-6" />
+        <span className="sr-only">Open Chat</span>
+      </Button>
+    </Link>
+  </div>
+);
 
 export default function HomePage() {
   return (
@@ -52,6 +69,7 @@ export default function HomePage() {
         />
         <End />
       </div>
+      <ChatWidget />
     </main>
   );
 }

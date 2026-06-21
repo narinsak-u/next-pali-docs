@@ -1,0 +1,32 @@
+import { z } from "zod";
+
+export const taskStatusSchema = z.enum(["pending", "running", "done", "error"]);
+
+export const reasoningPartSchema = z.object({
+  summary: z.string().min(1),
+  excerpts: z.array(z.string()).optional(),
+});
+
+export const taskPartSchema = z.object({
+  id: z.string().optional(),
+  label: z.string().min(1),
+  status: taskStatusSchema,
+  query: z.string().optional(),
+  matchCount: z.number().int().nonnegative().optional(),
+  message: z.string().optional(),
+});
+
+export const suggestionsPartSchema = z.object({
+  suggestions: z.array(z.string().min(1)).min(1).max(3),
+});
+
+export const statusPartSchema = z.object({
+  phase: z.enum(["thinking", "searching", "answering"]),
+  message: z.string().optional(),
+});
+
+export type ReasoningPart = z.infer<typeof reasoningPartSchema>;
+export type TaskPart = z.infer<typeof taskPartSchema>;
+export type SuggestionsPart = z.infer<typeof suggestionsPartSchema>;
+export type StatusPart = z.infer<typeof statusPartSchema>;
+export type TaskStatus = z.infer<typeof taskStatusSchema>;

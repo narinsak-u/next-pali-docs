@@ -58,7 +58,7 @@ npm run build    # Build + update index
 ```env
 NEXT_PUBLIC_ALGOLIA_APP_ID=
 NEXT_PUBLIC_ALGOLIA_SEARCH_API_KEY=
-NEXT_PUBLIC_ALGOLIA_ADMIN_API_KEY=
+ALGOLIA_ADMIN_API_KEY=          # server-side only, no NEXT_PUBLIC_ prefix
 PINECONE_API_KEY=
 PINECONE_INDEX_NAME=
 ```

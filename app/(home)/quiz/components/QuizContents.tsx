@@ -29,13 +29,13 @@ export default function QuizContents() {
     answers,
     quizCompleted,
     timeExpired,
-    isLoading,
-    object,
     allQuestionsAnswered,
     answeredQuestionsCount,
     progressPercentage,
     score,
     error,
+    matchCount,
+    isGenerating,
     startQuiz,
     selectOption,
     goToPage,
@@ -55,7 +55,14 @@ export default function QuizContents() {
   }
 
   if (appState === "loading") {
-    return <LoadingOverlay onComplete={() => {}} error={getErrorMessage(error)} onRetry={handleRetry} />;
+    return (
+      <LoadingOverlay
+        error={getErrorMessage(error)}
+        onRetry={handleRetry}
+        phase={error ? "idle" : isGenerating ? "generating" : "searching"}
+        matchCount={matchCount}
+      />
+    );
   }
 
   if (appState === "quiz") {
@@ -66,17 +73,16 @@ export default function QuizContents() {
           currentPage={currentPage}
           setCurrentPage={goToPage}
           questions={questions}
-          object={object}
           answers={answers}
           quizCompleted={quizCompleted}
           timeExpired={timeExpired}
-          isLoading={isLoading}
           handleTimeUp={timeUp}
           handleSelectOption={selectOption}
           handleSubmitQuiz={submitQuiz}
           allQuestionsAnswered={allQuestionsAnswered}
           answeredQuestionsCount={answeredQuestionsCount}
           progressPercentage={progressPercentage}
+          isGenerating={isGenerating}
         />
         <Disclaimer />
       </>

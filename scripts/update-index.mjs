@@ -7,10 +7,10 @@ import * as path from "node:path";
 import fetch from "node-fetch"; // If using Node < 18, install via `npm install node-fetch`
 
 const appId = process.env.NEXT_PUBLIC_ALGOLIA_APP_ID || '';
-const apiKey = process.env.NEXT_PUBLIC_ALGOLIA_ADMIN_API_KEY || ''; // must be admin key
+const apiKey = process.env.ALGOLIA_ADMIN_API_KEY || ''; // must be admin key
 
 if (!appId || !apiKey) {
-  throw new Error("Missing NEXT_PUBLIC_ALGOLIA_APP_ID or NEXT_PUBLIC_ALGOLIA_ADMIN_API_KEY environment variables.");
+  throw new Error("Missing NEXT_PUBLIC_ALGOLIA_APP_ID or ALGOLIA_ADMIN_API_KEY environment variables.");
 }
 
 const client = algoliasearch(appId, apiKey);

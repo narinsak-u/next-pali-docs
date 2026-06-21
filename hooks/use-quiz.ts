@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { quizTopicsById } from "@/data/quiz-topic";
 import { mapQuestionsFromResponse } from "@/helpers/map-questions";
 import type { Question } from "@/lib/schemas/quiz";
@@ -21,7 +21,8 @@ interface UseQuizReturn {
   timeExpired: boolean;
   isLoading: boolean;
   error: Error | null;
-  object: import("@/lib/schemas/quiz").QuizResponse | undefined;
+  matchCount: number;
+  isGenerating: boolean;
   allQuestionsAnswered: boolean;
   answeredQuestionsCount: number;
   progressPercentage: number;
@@ -41,6 +42,8 @@ export function useQuiz(): UseQuizReturn {
   const ai = useQuizAI();
   const { stats } = useQuizStats(data.questions, data.answers);
 
+  const hasTransitioned = useRef(false);
+
   const startQuiz = useCallback(
     async (topicId: string) => {
       const topic = quizTopicsById.get(topicId);
@@ -49,6 +52,7 @@ export function useQuiz(): UseQuizReturn {
         return;
       }
 
+      hasTransitioned.current = false;
       data.setTopic(topicId);
       flow.start();
       ui.reset();
@@ -59,21 +63,21 @@ export function useQuiz(): UseQuizReturn {
         topics: topic.keywords,
       });
     },
-    [ai, data, flow, ui]
+    [ai, data, flow, ui],
   );
 
   const selectOption = useCallback(
     (questionId: string, optionId: string) => {
       data.answer(questionId, optionId);
     },
-    [data]
+    [data],
   );
 
   const goToPage = useCallback(
     (page: number) => {
       ui.setPage(page);
     },
-    [ui]
+    [ui],
   );
 
   const timeUp = useCallback(() => {
@@ -104,13 +108,23 @@ export function useQuiz(): UseQuizReturn {
     data.clearAnswers();
   }, [data, flow, ui]);
 
+  // Transition from loading → quiz on first question received
   useEffect(() => {
-    if (ai.object?.questions) {
-      const mappedQuestions = mapQuestionsFromResponse(ai.object.questions);
-      data.setQuestions(mappedQuestions);
+    if (!hasTransitioned.current && ai.questions.length > 0) {
+      hasTransitioned.current = true;
+      const mapped = mapQuestionsFromResponse(ai.questions);
+      data.setQuestions(mapped);
       flow.goToQuiz();
     }
-  }, [ai.object, ai.isLoading, data, flow]);
+  }, [ai.questions, data, flow]);
+
+  // Update questions as more arrive
+  useEffect(() => {
+    if (hasTransitioned.current && ai.questions.length > 0) {
+      const mapped = mapQuestionsFromResponse(ai.questions);
+      data.setQuestions(mapped);
+    }
+  }, [ai.questions]);
 
   useEffect(() => {
     if (flow.appState === "quiz" || flow.appState === "results") {
@@ -126,9 +140,10 @@ export function useQuiz(): UseQuizReturn {
     answers: data.answers,
     quizCompleted: ui.completed,
     timeExpired: ui.timeExpired,
-    isLoading: ai.isLoading,
+    isLoading: ai.phase === "searching" || ai.phase === "generating",
     error: ai.error,
-    object: ai.object,
+    matchCount: ai.matchCount,
+    isGenerating: ai.phase === "generating",
     allQuestionsAnswered: stats.allQuestionsAnswered,
     answeredQuestionsCount: stats.answeredQuestionsCount,
     progressPercentage: stats.progressPercentage,
