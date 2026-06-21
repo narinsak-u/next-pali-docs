@@ -24,5 +24,5 @@ export const llm = createOpenAICompatible({
 export function getDefaultModel(): string {
   return providerName === "opencode"
     ? (process.env.OPENCODE_LLM_MODEL ?? "deepseek-v4-flash")
-    : (process.env.OPENROUTER_LLM_MODEL ?? "google/gemma-4-31b-it:free");
+    : (process.env.OPENROUTER_LLM_MODEL ?? "google/gemma-3-27b-it:free");
 }

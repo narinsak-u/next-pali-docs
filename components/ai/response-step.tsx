@@ -1,5 +1,8 @@
+"use client";
+
 import { useMemo } from "react";
 import { marked } from "marked";
+import DOMPurify from "dompurify";
 import { cn } from "@/lib/utils";
 
 export function ResponseStep({
@@ -11,7 +14,10 @@ export function ResponseStep({
 }) {
   const html = useMemo(() => {
     if (isStreaming || !text) return null;
-    return marked.parse(text, { async: false }) as string;
+    const raw = marked.parse(text, { async: false }) as string;
+    return DOMPurify.sanitize(raw, {
+      USE_PROFILES: { html: true },
+    });
   }, [text, isStreaming]);
 
   return (

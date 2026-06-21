@@ -334,7 +334,7 @@ flow.goToResults();
 | `PINECONE_NAMESPACE` | Pinecone namespace |
 | `PROVIDER_NAME` | LLM provider selection (`openrouter` or `opencode`, default: `openrouter`) |
 | `OPENROUTER_API_KEY` / `OPENAI_API_KEY` | OpenRouter provider API key |
-| `OPENROUTER_LLM_MODEL` / `LLM_MODEL` | Model for OpenRouter (default: `google/gemma-4-31b-it:free`) |
+| `OPENROUTER_LLM_MODEL` / `LLM_MODEL` | Model for OpenRouter (default: `google/gemma-3-27b-it:free`) |
 | `OPENCODE_API_KEY` | OpenCode provider API key |
 | `OPENCODE_LLM_MODEL` | Model for OpenCode (default: `deepseek-v4-flash`) |
 

@@ -38,7 +38,7 @@ The chat uses `llm(getDefaultModel())` from `lib/services/llm-provider.ts`, whic
 
 | Provider | `PROVIDER_NAME` | Base URL | Key Env Vars | Default Model |
 |----------|-----------------|----------|--------------|---------------|
-| OpenRouter | `openrouter` (default) | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY`, `OPENROUTER_LLM_MODEL` | `google/gemma-4-31b-it:free` |
+| OpenRouter | `openrouter` (default) | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY`, `OPENROUTER_LLM_MODEL` | `google/gemma-3-27b-it:free` |
 | OpenCode | `opencode` | `https://opencode.ai/zen/go/v1` | `OPENCODE_API_KEY`, `OPENCODE_LLM_MODEL` | `deepseek-v4-flash` |
 
 Both providers use `createOpenAICompatible` from `@ai-sdk/openai-compatible` under the hood. The `llm()` function creates a configured model instance, and `getDefaultModel()` returns the model name from the appropriate env var.

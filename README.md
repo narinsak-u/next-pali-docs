@@ -271,7 +271,7 @@ Set `PROVIDER_NAME` to choose your LLM backend (`openrouter` or `opencode`, defa
 
 | Provider | Env Vars for Model | Default |
 |----------|-------------------|---------|
-| OpenRouter | `OPENROUTER_LLM_MODEL` or `LLM_MODEL` | `google/gemma-4-31b-it:free` |
+| OpenRouter | `OPENROUTER_LLM_MODEL` or `LLM_MODEL` | `google/gemma-3-27b-it:free` |
 | OpenCode | `OPENCODE_LLM_MODEL` | `deepseek-v4-flash` |
 
 Both providers use `createOpenAICompatible` from `@ai-sdk/openai-compatible` (see `lib/services/llm-provider.ts`).
@@ -286,7 +286,7 @@ PROVIDER_NAME=openrouter   # or "opencode" for OpenCode's DeepSeek models
 
 # Option A: OpenRouter
 OPENROUTER_API_KEY=sk-or-v1-...
-OPENROUTER_LLM_MODEL=google/gemma-4-31b-it:free
+OPENROUTER_LLM_MODEL=google/gemma-3-27b-it:free
 
 # Option B: OpenCode
 OPENCODE_API_KEY=sk-...
