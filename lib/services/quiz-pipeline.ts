@@ -21,9 +21,15 @@ export interface QuizInput {
 }
 
 const MAX_STEPS = 20;
+const QUIZ_BASE_SYSTEM =
+  "You are a quiz generator that creates multiple-choice questions based on provided context. Generate questions one at a time using the submitQuestions tool. Call the tool once per batch of questions.";
 
 function stopWhenForAmount(amount: number) {
   return stepCountIs(Math.max(MAX_STEPS, Math.ceil(amount / 2) + 5));
+}
+
+function buildSystemWithContext(baseSystem: string, context: string): string {
+  return `${baseSystem}\n\nContext from Pali textbook corpus:\n${context}\n\nUse this context to generate the questions. Do not search again — you already have the necessary information.`;
 }
 
 export function generateQuizStream(
@@ -97,15 +103,12 @@ export function generateQuizStream(
 
       const result = streamText({
         model: llm(getDefaultModel()),
-        system:
-          "You are a quiz generator that creates multiple-choice questions based on textbook content. Generate questions one at a time using the submitQuestions tool. Call the tool once per batch of questions.",
+        system: QUIZ_BASE_SYSTEM,
         messages: [
           {
             role: "user",
             content: [
-              "Using this context as reference:\n",
-              context,
-              `\nGenerate ${input.amount} multiple-choice questions about ${input.topics.join(", ")}.`,
+              `Generate ${input.amount} multiple-choice questions about ${input.topics.join(", ")}.`,
               "The questions must be based on the provided context.",
               "Each question should test understanding of key concepts.",
               "Make sure each question and its options are directly related to the content.",
@@ -154,6 +157,12 @@ export function generateQuizStream(
               return { submitted: questions.length };
             },
           }),
+        },
+        prepareStep: async ({ steps }) => {
+          if (steps.length === 0) return undefined;
+          return {
+            system: buildSystemWithContext(QUIZ_BASE_SYSTEM, context),
+          };
         },
         stopWhen: stopWhenForAmount(input.amount),
       });
