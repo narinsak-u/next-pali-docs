@@ -1,24 +1,17 @@
 "use client";
 
-import { useMemo, useCallback, useRef } from "react";
+import { useMemo, useCallback } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
+import { isDataPart } from "@/lib/chat/message-parts";
+import { type QuestionPart } from "@/lib/schemas/ai-data-parts";
 
 export type QuizPhase = "idle" | "searching" | "generating" | "done" | "error";
-
-export interface QuizQuestion {
-  id: string;
-  question: string;
-  answer: string;
-  option1: string;
-  option2: string;
-  option3: string;
-}
 
 export interface UseQuizAIReturn {
   phase: QuizPhase;
   matchCount: number;
-  questions: QuizQuestion[];
+  questions: QuestionPart[];
   error: Error | null;
   messages: UIMessage[];
   status: string;
@@ -42,19 +35,19 @@ function deriveState(messages: UIMessage[], status: string, error: Error | undef
 
   let matchCount = 0;
   let searchDoneSeen = false;
-  const questions: QuizQuestion[] = [];
+  const questions: QuestionPart[] = [];
 
   for (const m of messages) {
     for (const p of m.parts ?? []) {
+      if (!isDataPart(p)) continue;
       if (p.type === "data-task") {
-        const d = p.data as { label: string; status: string; matchCount?: number };
+        const d = p.data;
         if (d.label === "ค้นหาเอกสาร" && d.status === "done" && typeof d.matchCount === "number") {
           matchCount = d.matchCount;
           searchDoneSeen = true;
         }
       } else if (p.type === "data-question") {
-        const d = p.data as QuizQuestion;
-        questions.push(d);
+        questions.push(p.data);
       }
     }
   }
@@ -73,11 +66,8 @@ export function useQuizAI(): UseQuizAIReturn {
     transport: new DefaultChatTransport({ api: "/api/quiz" }),
   });
 
-  const requestIdRef = useRef(0);
-
   const submit = useCallback(
     (payload: { topics: string[]; amount: number }) => {
-      requestIdRef.current += 1;
       setMessages([]);
       sendMessage({ text: JSON.stringify(payload) });
     },
