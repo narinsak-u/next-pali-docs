@@ -4,6 +4,7 @@ import {
   taskPartSchema,
   suggestionsPartSchema,
   taskStatusSchema,
+  questionPartSchema,
 } from "@/lib/schemas/ai-data-parts";
 
 describe("ai-data-parts", () => {
@@ -132,5 +133,33 @@ describe("reduceTaskParts", () => {
   it("returns an empty array for empty input", async () => {
     const { reduceTaskParts } = await import("@/lib/chat/reduce-task-parts");
     expect(reduceTaskParts([])).toEqual([]);
+  });
+});
+
+describe("questionPartSchema", () => {
+  it("accepts a valid question part", () => {
+    expect(
+      questionPartSchema.parse({
+        id: "q-1",
+        question: "What is dhamma?",
+        answer: "Teaching of the Buddha",
+        option1: "Wrong 1",
+        option2: "Wrong 2",
+        option3: "Wrong 3",
+      }),
+    ).toEqual({
+      id: "q-1",
+      question: "What is dhamma?",
+      answer: "Teaching of the Buddha",
+      option1: "Wrong 1",
+      option2: "Wrong 2",
+      option3: "Wrong 3",
+    });
+  });
+
+  it("rejects missing required fields", () => {
+    expect(() =>
+      questionPartSchema.parse({ id: "q-1", question: "x" }),
+    ).toThrow();
   });
 });
