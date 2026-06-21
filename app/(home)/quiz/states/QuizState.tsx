@@ -5,6 +5,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { QuizPagination } from "../components/QuizPagination";
 import { Button } from "@/components/ui/button";
 import { Question, QuizQuestion } from "../components/QuizQuestont";
+import { QuizProcess } from "../components/QuizProcess";
 import { CheckCircle, Loader2 } from "lucide-react";
 
 type Props = {
@@ -22,6 +23,7 @@ type Props = {
   handleSelectOption: (questionId: string, optionId: string) => void;
   handleSubmitQuiz: () => void;
   isGenerating?: boolean;
+  quizContext?: { messages: import("ai").UIMessage[]; matchCount: number };
 };
 
 const QuizState = ({
@@ -39,6 +41,7 @@ const QuizState = ({
   handleSelectOption,
   handleSubmitQuiz,
   isGenerating = false,
+  quizContext,
 }: Props) => {
   // Pagination setup
   const questionsPerPage = 5;
@@ -89,6 +92,16 @@ const QuizState = ({
             <Loader2 className="size-4 animate-spin text-primary" />
             <span>กำลังสร้างคำถามเพิ่มเติม...</span>
           </div>
+        )}
+
+        {quizContext && (
+          <QuizProcess
+            messages={quizContext.messages}
+            isStreaming={false}
+            matchCount={quizContext.matchCount}
+            error={null}
+            mode="badge-only"
+          />
         )}
 
         <Card>
