@@ -83,7 +83,7 @@ stream:
 2. **Generating**
    - `writer.write({ type: "data-status", data: { phase: "answering" } })`
    - Build `context = formatContext(matches)` (empty string if error path).
-   - `streamText` with the same `submitQuestions` tool. The tool's `execute` writes a `data-question` part per question (see part schema below) and tracks `totalSubmitted`.
+   - `streamText` with the `submitQuestions` tool. The tool's `execute` is rewritten to write a `data-question` part per question (see part schema below) instead of the old `send("question", q)` SSE call. The total question count is no longer tracked server-side; the client derives it from the part list.
    - `writer.merge(result.toUIMessageStream({ sendReasoning: false }))` and `await result.consumeStream()`.
    - `prepareStep` injects the formatted context into the system prompt for steps after the first (same pattern as the question route's `prepareStep`).
 
@@ -159,18 +159,30 @@ the ref and `setMessages([])` before `sendMessage(...)`. The
 
 Create `app/(home)/quiz/components/QuizProcess.tsx` (orchestrator):
 
-Props: `{ messages: UIMessage[]; isStreaming: boolean; matchCount: number; error: Error | null }`.
+Props:
+
+```ts
+{
+  messages: UIMessage[];
+  isStreaming: boolean;       // status === "streaming" || status === "submitted"
+  matchCount: number;
+  error: Error | null;
+  onRetry?: () => void;
+}
+```
 
 Renders the same composition as `AIMessage`:
 1. `ProcessStepsInline` with `steps`, `reasoning`, `tasks`, `isDone`
-   (derived from messages).
+   (derived from messages). Only the search task is rendered as a
+   `TaskStep`; the question events are not turned into steps — they
+   flow into the questions list and into the LLM's text output.
 2. `ProcessBadge` with the match-count label and a `ProcessDetails`
    child.
 
 This component is rendered in two places:
 - On the home/loading state (replacing `LoadingOverlay`).
 - At the top of `QuizState` (while answering), showing only the badge
-  (steps collapsed).
+  (steps collapsed). The `QuizProcess` component accepts a `mode: "full" | "badge-only"` prop to switch between the two.
 
 ### 6. `QuizContents` — drop `LoadingOverlay`
 
@@ -193,6 +205,7 @@ if (appState === "loading") {
       matchCount={matchCount}
       error={error}
       onRetry={handleRetry}
+      mode="full"
     />
   );
 }
@@ -200,15 +213,18 @@ if (appState === "loading") {
 
 Keep the error retry path. The `QuizProcess` component shows the error
 inline (using `ProcessBadge` with the error state) plus a retry
-button.
+button. The `mode="full"` prop tells `QuizProcess` to render both the
+inline steps and the badge (the loading state needs both).
 
 ### 7. `QuizState` — keep the badge visible
 
 In `app/(home)/quiz/states/QuizState.tsx`, add a new prop
 `quizContext?: { messages: UIMessage[]; matchCount: number }` and
-render a slim `ProcessBadge` at the top of the card area (above the
-title). The badge collapses the steps by default in this state, with
-the `ProcessDetails` available on click.
+render `QuizProcess` with `mode="badge-only"` at the top of the card
+area (above the title). The inline steps are not shown in this state
+because the user is answering questions, not watching the pipeline
+run; the badge gives one-click access to the reasoning excerpts that
+informed the questions.
 
 When the user submits (results state), the badge is no longer
 relevant — `QuizContents` passes `quizContext={null}` (or omits it)
@@ -228,13 +244,25 @@ to:
 
 ```ts
 {
-  phase, matchCount, questions, error, messages, status, submit, stop, clear
+  // Derived from messages
+  phase, matchCount, questions, error,
+  // Raw from useChat — passed through to QuizProcess
+  messages, status,
+  // Actions
+  submit, stop, clear
 }
 ```
 
-`use-quiz.ts:23-44` and `use-quiz.ts:115-131` (the effects that
-transition loading → quiz and append new questions) are updated to
-read from the new derived state.
+`submit(payload)` still takes `{ topics, amount }`; internally it
+calls `setMessages([])` and `sendMessage({ text: JSON.stringify(payload) })`
+(or a structured `sendMessage` form, depending on what `useChat` accepts
+for non-text payloads — see writing-plans for the exact call shape).
+
+`hooks/use-quiz.ts:23-44` and `hooks/use-quiz.ts:115-131` (the effects
+that transition loading → quiz and append new questions) are updated
+to read `phase` and `questions` from the new derived state and to
+treat `messages` and `status` as the source of truth for what the
+pipeline is currently doing.
 
 ## Data flow
 
@@ -323,10 +351,11 @@ as the implicit `done` phase.
 | `lib/chat/message-parts.ts`                                                         | Extend `DataPart` union and `isDataPart` to include `data-question`                     |
 | `lib/services/quiz-pipeline.ts`                                                     | Rewrite `generateQuizStream` to return `UIMessageStream`; delete dead `generateQuiz`    |
 | `app/api/quiz/route.ts`                                                             | Return `createUIMessageStreamResponse`; keep quota + 500 error mapping                  |
-| `lib/hooks/use-quiz-ai.ts`                                                          | Rewrite to wrap `useChat` and derive state from `messages`                              |
+| `lib/hooks/use-quiz-ai.ts`                                                          | Rewrite to wrap `useChat` and derive state from `messages`; expose new public signature |
 | `app/(home)/quiz/components/QuizProcess.tsx`                                        | New — orchestrates `ProcessStepsInline` + `ProcessBadge` + `ProcessDetails`             |
-| `app/(home)/quiz/components/QuizContents.tsx`                                        | Replace `LoadingOverlay` usage with `QuizProcess`; pass `quizContext` to `QuizState`   |
-| `app/(home)/quiz/states/QuizState.tsx`                                              | Accept `quizContext` prop, render slim `ProcessBadge` at top                            |
+| `app/(home)/quiz/components/QuizContents.tsx`                                        | Replace `LoadingOverlay` usage with `QuizProcess` (`mode="full"`); pass `quizContext`   |
+| `app/(home)/quiz/components/LoadingOverlay.tsx`                                      | Delete — superseded by `QuizProcess`                                                    |
+| `app/(home)/quiz/states/QuizState.tsx`                                              | Accept `quizContext` prop, render `QuizProcess` (`mode="badge-only"`) at top            |
 | `hooks/use-quiz.ts`                                                                 | Update to consume new hook signature; pass `quizContext` to `QuizState`                 |
 | `tests/quiz-pipeline.test.ts`                                                       | Rewrite to assert `UIMessageStream` writes                                             |
 | `tests/quiz-route.test.ts`                                                          | Update assertions for new return shape                                                  |
