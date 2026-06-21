@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { UIMessage } from "ai";
-import { QuizProcess } from "./QuizProcess";
+import { QuizProcess } from "@/app/(home)/quiz/components/QuizProcess";
 
 const messages: UIMessage[] = [
   {

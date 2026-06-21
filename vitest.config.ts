@@ -12,8 +12,9 @@ export default defineConfig({
     exclude: ['.worktrees/**', 'node_modules/**', '.next/**', 'dist/**'],
   },
   resolve: {
-    alias: {
-      '@': resolve(__dirname, './'),
-    },
+    alias: [
+      { find: '@', replacement: resolve(__dirname, './') },
+      { find: '@tests/', replacement: resolve(__dirname, './tests') + '/' },
+    ],
   },
 })

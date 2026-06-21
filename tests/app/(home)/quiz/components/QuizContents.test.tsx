@@ -6,7 +6,7 @@ vi.mock("@/hooks/use-quiz", () => ({
 }));
 
 import { useQuiz } from "@/hooks/use-quiz";
-import QuizContents from "./QuizContents";
+import QuizContents from "@/app/(home)/quiz/components/QuizContents";
 
 const mockedUseQuiz = vi.mocked(useQuiz);
 
