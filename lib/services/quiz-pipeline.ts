@@ -20,12 +20,6 @@ export interface QuizInput {
   amount: number;
 }
 
-const SEARCH_TASK_LABEL = "ค้นหาเอกสาร";
-
-function buildSystemWithContext(baseSystem: string, context: string): string {
-  return `${baseSystem}\n\nContext from Pali textbook corpus:\n${context}\n\nUse this context to generate the questions. Do not search again — you already have the necessary information.`;
-}
-
 const MAX_STEPS = 20;
 
 function stopWhenForAmount(amount: number) {
@@ -37,8 +31,9 @@ export function generateQuizStream(
 ): ReadableStream<InferUIMessageChunk<UIMessage>> {
   return createUIMessageStream({
     execute: async ({ writer }) => {
-      let searchCompleted = false;
-      const searchToolCallId = `search-${Date.now()}`;
+      let idCounter = 0;
+      const nextId = (prefix: string) => `${prefix}-${++idCounter}`;
+      const searchToolCallId = nextId("search");
 
       writer.write({
         type: "data-status",
@@ -49,7 +44,7 @@ export function generateQuizStream(
         type: "data-task",
         data: {
           id: searchToolCallId,
-          label: SEARCH_TASK_LABEL,
+          label: "ค้นหาเอกสาร",
           status: "running",
           query: input.topics.join(", "),
         },
@@ -65,7 +60,7 @@ export function generateQuizStream(
           type: "data-task",
           data: {
             id: searchToolCallId,
-            label: SEARCH_TASK_LABEL,
+            label: "ค้นหาเอกสาร",
             status: "error",
             message,
           },
@@ -73,28 +68,25 @@ export function generateQuizStream(
         matches = [];
       }
 
-      if (!searchCompleted) {
-        searchCompleted = true;
-        writer.write({
-          type: "data-task",
-          data: {
-            id: searchToolCallId,
-            label: SEARCH_TASK_LABEL,
-            status: "done",
-            matchCount: matches.length,
-          },
-        });
-        const excerpts = matches
-          .slice(0, 10)
-          .map((m) => m.text.slice(0, 120).trim());
-        writer.write({
-          type: "data-reasoning",
-          data: {
-            summary: `พบเอกสารที่เกี่ยวข้อง ${matches.length} รายการ`,
-            excerpts,
-          },
-        });
-      }
+      writer.write({
+        type: "data-task",
+        data: {
+          id: searchToolCallId,
+          label: "ค้นหาเอกสาร",
+          status: "done",
+          matchCount: matches.length,
+        },
+      });
+      const excerpts = matches
+        .slice(0, 10)
+        .map((m) => m.text.slice(0, 120).trim());
+      writer.write({
+        type: "data-reasoning",
+        data: {
+          summary: `พบเอกสารที่เกี่ยวข้อง ${matches.length} รายการ`,
+          excerpts,
+        },
+      });
 
       writer.write({
         type: "data-status",
@@ -146,11 +138,11 @@ export function generateQuizStream(
                 .describe("Array of quiz questions to submit"),
             }),
             execute: async ({ questions }) => {
-              questions.forEach((q, i) => {
+              questions.forEach((q) => {
                 writer.write({
                   type: "data-question",
                   data: {
-                    id: `q-${Date.now()}-${i}`,
+                    id: nextId("q"),
                     question: q.question,
                     answer: q.answer,
                     option1: q.option1,
@@ -164,15 +156,6 @@ export function generateQuizStream(
           }),
         },
         stopWhen: stopWhenForAmount(input.amount),
-        prepareStep: async ({ steps }) => {
-          if (steps.length === 0) return undefined;
-          return {
-            system: buildSystemWithContext(
-              "You are a quiz generator that creates multiple-choice questions based on textbook content. Generate questions one at a time using the submitQuestions tool. Call the tool once per batch of questions.",
-              context,
-            ),
-          };
-        },
       });
 
       writer.merge(result.toUIMessageStream({ sendReasoning: false }));
